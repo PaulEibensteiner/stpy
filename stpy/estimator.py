@@ -13,7 +13,6 @@ from stpy.helpers import helper
 from stpy.optim.custom_optimizers import bisection
 
 class Estimator(ABC):
-class Estimator(ABC):
 
 	def fit(self):
 		pass

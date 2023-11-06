@@ -205,7 +205,7 @@ class KernelizedFeatures(GaussianProcess):
 
 						self.invK = newKinv
 
-						self.add_points(newx, newy)
+						self.add_points((newx, newy))
 						self.n = self.n + 1
 						self.Q = self.embed(self.x)
 						self.invK_V = (1. / self.lam) * (-self.Q.T @ self.invK @ self.Q + torch.eye(int(self.m)))
@@ -213,7 +213,7 @@ class KernelizedFeatures(GaussianProcess):
 					else:  # via Woodbury
 						c = 1 + emb @ self.invV @ emb.T
 						self.invV = self.invV - (self.invV @ emb.T @ emb @ self.invV) / c
-						self.add_points(newx, newy)
+						self.add_points((newx, newy))
 						self.n = self.n + 1
 						self.Q = self.embed(self.x)
 					# add point
@@ -498,14 +498,14 @@ class KernelizedFeatures(GaussianProcess):
 		solution = results[index, 0]
 		return (torch.from_numpy(solution).view(1, -1), -torch.from_numpy(fun(solution)))
 
-	def sample_and_optimize(self, xtest=None, multistart=25, minimizer="L-BFGS-B", grid=100, verbose=0):
+	def sample_and_optimize(self, xtest=None, multistart=25, minimizer="L-BFGS-B", grid=100, verbose=0, size = 1):
 		'''
 			Sample functions from Gaussian Process and take Maximum using
 			first order maximization
 		'''
 
 		# sample linear approximating
-		theta = self.sample_theta()
+		theta = self.sample_theta(size = size)
 
 		# get bounds
 		if self.bounds == None:
@@ -513,26 +513,33 @@ class KernelizedFeatures(GaussianProcess):
 		else:
 			mybounds = self.bounds
 
-		fun = lambda x: -torch.mm(torch.t(theta), torch.t(self.embed(torch.from_numpy(x).view(1, -1)))).numpy()[0]
+		output_solutions = torch.zeros(size=(size, self.d), dtype=torch.float64)
+		output_values = torch.zeros(size=(size, 1), dtype=torch.float64)
 
-		results = []
-		for j in range(multistart):
-			x0 = np.random.randn(self.d)
-			for i in range(self.d):
-				x0[i] = np.random.uniform(mybounds[i][0], mybounds[i][1])
+		for n in range(size):
+			fun = lambda x: -torch.mm(torch.t(theta[:, n].reshape(-1, 1)), torch.t(self.embed(torch.from_numpy(x).view(1, -1)))).numpy()[0]
 
-			if minimizer == "L-BFGS-B":
-				res = minimize(fun, x0, method="L-BFGS-B", jac=None, tol=0.0001, bounds=mybounds)
-				solution = res.x
-			else:
-				raise AssertionError("Wrong optimizer selected.")
+			results = []
+			for j in range(multistart):
+				x0 = np.random.randn(self.d)
+				for i in range(self.d):
+					x0[i] = np.random.uniform(mybounds[i][0], mybounds[i][1])
 
-			results.append([solution, -fun(solution)])
-		results = np.array(results)
-		index = np.argmax(results[:, 1])
-		solution = results[index, 0]
+				if minimizer == "L-BFGS-B":
+					res = minimize(fun, x0, method="L-BFGS-B", jac=None, tol=0.0001, bounds=mybounds)
+					solution = res.x
+				else:
+					raise AssertionError("Wrong optimizer selected.")
 
-		return (torch.from_numpy(solution), -torch.from_numpy(fun(solution)))
+				results.append([solution, -fun(solution)])
+			results_f = np.array([f for _, f in results])
+			index = np.argmax(results_f)
+			solution = results[index][0]
+
+			output_solutions[n, :] = torch.from_numpy(solution)
+			output_values[n, :] = -torch.from_numpy(fun(solution))
+
+		return (output_solutions, output_values)
 
 	def sample(self, xtest, size=1, prior=False):
 		'''

@@ -105,7 +105,7 @@ class KernelizedFeatures(GaussianProcess):
 		d = torch.trace(torch.solve(Phi.T @ Phi, Phi.T @ Phi + torch.eye(self.get_basis_size()).double() * self.lam)[0])
 		return d
 
-	def add_data_point(self, x, y):
+	def add_data_point(self, x, y, sigma = None):
 		if self.n == 0:
 			self.fit_gp(x, y)
 		else:

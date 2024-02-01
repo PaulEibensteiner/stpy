@@ -45,7 +45,7 @@ class NystromFeatures(Embedding):
 
 	def uniform_subsampling(self, x, y):
 		N = x.size()[0]
-		C = np.random.choice(N, int(self.ms))
+		C = np.random.choice(N, int(self.ms), replace = False)
 		weights = torch.ones(self.ms)
 		return (C, weights)
 
@@ -109,13 +109,17 @@ class NystromFeatures(Embedding):
 		'''
 		self.x = x
 		self.y = y
+
 		self.d = x.size()[1]
 		self.N = x.size()[0]
+
 		assert (self.ms <= self.N)
 		self.linear_kernel = KernelFunction(kernel_name="linear").linear_kernel
+
 		if self.approx == "svd":
 			self.xs = x
 			K = self.kernel(x, x)
+
 			if 3 * self.ms > self.N:
 				(D, V) = torch.linalg.eigh(K, UPLO='U')
 				V = torch.t(V)[self.N - self.ms:self.N, :].T
@@ -135,6 +139,7 @@ class NystromFeatures(Embedding):
 			# self.embed = lambda q: torch.t(torch.mm(Dinv, torch.mm(torch.t(V)[self.N-self.ms:self.N,:], self.kernel(q, self.x)   )))
 			self.embed = lambda q: self.kernel(q, self.xs).T @ self.M
 			self.C = []
+
 		elif self.approx == 'nothing':
 			self.xs = self.x[0:self.ms, :]
 			self.M = torch.eye(self.ms).double()
@@ -219,6 +224,14 @@ class NystromFeatures(Embedding):
 			yvar = torch.sqrt(diagonal)
 
 		return (ymean, yvar)
+
+	def integral(self, S, n = 256):
+		if S.d == 1:
+			weights, nodes = S.return_legendre_discretization(n=n)
+			psi = torch.sum(torch.diag(weights) @ self.embed(nodes), dim=0)
+			return psi.view(1,-1)
+		else:
+			raise NotImplementedError("The feature for multidimensional sets is not implemented.")
 
 	def outer_kernel(self):
 		embeding = self.embed(self.x)

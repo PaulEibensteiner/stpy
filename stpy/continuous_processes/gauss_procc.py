@@ -19,7 +19,7 @@ class GaussianProcess(Estimator):
 
 	def __init__(self, gamma=1, s=0.001, kappa=1., kernel_name="squared_exponential", diameter=1.0,
 				 groups=None, bounds=None, nu=1.5, kernel=None, d=1, power=2, lam=1., loss = 'squared', huber_delta = 1.35,
-				 hyper = 'classical', B = 1., svr_eps = 0.1):
+				 hyper = 'classical', B = 1., svr_eps = 0.1, packet_size = 10000):
 		"""
 
 		:param gamma: Smoothnes parameter for squared exponential, laplace and matern kernel
@@ -52,7 +52,7 @@ class GaussianProcess(Estimator):
 		self.hyper = hyper
 		self.prepared_log_marginal = False
 		self.warm_start_solution = None
-		self.max_size = 10000
+		self.max_size = packet_size
 		## kernel hyperparameters
 		if kernel is not None:
 			self.kernel_object = kernel

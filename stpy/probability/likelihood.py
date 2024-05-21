@@ -92,9 +92,9 @@ class Likelihood(ABC):
         H = params['regularizer_hessian']
         sigma = params['sigma']
         n = self.x.size()[0]
-        K = (self.x@self.x.T + torch.max(H)*sigma**2*torch.eye(n))
-        evidence_of_the_data = -0.5*self.y.T@torch.linalg.solve(K,self.y)-0.5*torch.linalg.slogdet(K)[1]#-(n/2)*np.log(2*np.pi) ## remove this as in likelihood not added
-        evidence_of_the_data = evidence_of_the_data #- np.log(2*np.pi*sigma**2)
+        K = (self.x@self.x.T + torch.max(H)*(sigma**2)*torch.eye(n))
+        evidence_of_the_data = -0.5*self.y.T@torch.linalg.solve(K,self.y)-0.5*torch.linalg.slogdet(K)[1]-(n/2)*np.log(2*np.pi) +(n/2)*np.log(2*np.pi*sigma**2)
+        evidence_of_the_data = evidence_of_the_data
         return np.log(1./delta) - evidence_of_the_data
 
     def prior_posterior_lr_confidence_set_cvxpy(self, theta, beta, params):
@@ -107,8 +107,8 @@ class Likelihood(ABC):
         """
         # create a Gaussian likelihood
         sigma = params['sigma']
-        def gauss_likelihood(theta): return cp.sum_squares(self.x @ theta - self.y) / (2 * sigma ** 2)
-        self.set_fn = lambda theta:  [gauss_likelihood(theta)<= beta]
+        def gauss_likelihood(theta): return cp.sum(cp.square(self.x @ theta - self.y) / (2 * (sigma ** 2)))
+        self.set_fn = lambda theta:  [gauss_likelihood(theta) <= beta]
         set = self.set_fn(theta)
         return set
 

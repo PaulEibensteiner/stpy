@@ -20,9 +20,9 @@ class GaussianLikelihood(Likelihood):
 
     def evaluate_log(self, f):
         if self.Sigma is None:
-            res = torch.sum((f - self.y)**2)/self.sigma**2
+            res = torch.sum((f - self.y)**2)/(2*self.sigma**2)
         else:
-            res = ((f - self.y).T @ torch.inverse(self.Sigma.T@self.Sigma)  @ (f - self.y) )
+            res = ((f - self.y).T @ torch.inverse(2*self.Sigma.T@self.Sigma)  @ (f - self.y) )
         return res
 
     def load_data(self, D):
@@ -61,7 +61,7 @@ class GaussianLikelihood(Likelihood):
     def get_objective_cvxpy(self, mask = None):
         if mask is None:
             if self.Sigma is None:
-                def likelihood(theta): return cp.sum_squares(self.x@theta - self.y)/(2*self.sigma**2)
+                def likelihood(theta): return cp.sum(cp.square(self.x@theta - self.y))/(2*self.sigma**2)
 
             else:
                 def likelihood(theta): return cp.matrix_frac(self.x@theta - self.y,2*self.Sigma.T@self.Sigma)
@@ -84,15 +84,15 @@ class GaussianLikelihood(Likelihood):
     def information_matrix(self, mask = None):
         if mask is None:
             if self.Sigma is None:
-                V = self.x.T@self.x/(2*self.sigma**2)
+                V = self.x.T@self.x/(self.sigma**2)
             else:
-                V = self.x.T@torch.linalg.inv(self.Sigma.T@self.Sigma*2)@self.x
+                V = self.x.T@torch.linalg.inv(self.Sigma.T@self.Sigma)@self.x
             return V
         else:
             if self.Sigma is None:
-                V = self.x[mask,:].T@self.x[mask,:]/(2*self.sigma**2)
+                V = self.x[mask,:].T@self.x[mask,:]/(self.sigma**2)
             else:
-                V = self.x[mask,:].T@torch.linalg.inv(self.Sigma.T@self.Sigma*2)@self.x[mask,:]
+                V = self.x[mask,:].T@torch.linalg.inv(self.Sigma.T@self.Sigma)@self.x[mask,:]
             return V
 
     def get_confidence_set_cvxpy(self,

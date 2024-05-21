@@ -333,7 +333,7 @@ class GeneralizedAdditiveOverlap(BenchmarkFunction):
 		return self.gamma
 
 
-class SwissFEL(BenchmarkFunction):
+class p(BenchmarkFunction):
 	def __init__(self, **kwargs):
 		super().__init__(**kwargs)
 		self.d = kwargs['d']
@@ -358,11 +358,13 @@ class SwissFEL(BenchmarkFunction):
 class CustomBenchmark(BenchmarkFunction):
 
 	def __init__(self, **kwargs):
+		self.type = "discrete"
 		super().__init__(**kwargs)
 		if 'func' in kwargs:
 			self.eval_f = kwargs['func']
 		else:
 			self.eval_f = lambda x: x[:, 0].view(-1, 1) * 0
+
 		if 'likelihood' in kwargs:
 			self.likelihood = kwargs['likelihood']
 		else:

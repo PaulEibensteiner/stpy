@@ -11,7 +11,7 @@ class KernelFunction:
 
 	def __init__(self, kernel_function=None, kernel_name="squared_exponential", \
 				 freq=None, groups=None, d=1, gamma=1, ard_gamma=None, nu=1.5, kappa=1, map=None, power=2,
-				 cov=None, params=None, group=None):
+				 cov=None, params=None, group=None, offset = 0.):
 
 		if kernel_function is not None:
 			self.kernel_function = kernel_function
@@ -29,6 +29,7 @@ class KernelFunction:
 				self.group = group
 			self.d = d
 		else:
+			self.offset = offset
 			self.optkernel = kernel_name
 			self.gamma = gamma
 			if ard_gamma is None:
@@ -208,13 +209,19 @@ class KernelFunction:
 			self.params = dict(**self.params, **{'gamma': self.gamma, 'nu': self.v})
 			return self.matern_kernel
 
-		elif self.optkernel == "ard_matern":
+		elif self.optkernel == "ard_matern" and (self.groups is None):
 			self.params = dict(**self.params, **{'ard_gamma': self.ard_gamma, 'nu': self.v})
-
 			if diag:
 				return self.ard_matern_kernel_diag
 			else:
 				return self.ard_matern_kernel
+
+		elif self.optkernel == "ard_matern":
+			self.params = dict(**self.params, **{'ard_gamma': self.ard_gamma, 'nu': self.v, 'groups': self.groups})
+			if diag:
+				return self.ard_matern_per_group_kernel_additive_diag
+			else:
+				return self.ard_matern_per_group_kernel_additive
 
 		elif self.optkernel == "full_covariance_se":
 			self.params = dict(**self.params, **{'cov': self.cov})
@@ -307,7 +314,7 @@ class KernelFunction:
 
 		a = a[:, group]
 		b = b[:, group]
-		return kappa * (b @ a.T)
+		return kappa * (b @ a.T)  + self.offset
 
 	def custom_map_kernel(self, a, b, **kwargs):
 		if 'kappa' in kwargs.keys():
@@ -636,6 +643,71 @@ class KernelFunction:
 		r = kappa * r / float(len(groups))
 		return r
 
+	def ard_matern_per_group_kernel_additive(self, a, b, **kwargs):
+		if 'kappa' in kwargs.keys():
+			kappa = kwargs['kappa']
+		else:
+			kappa = self.kappa
+
+		if 'groups' in kwargs.keys():
+			groups = kwargs['groups']
+		else:
+			groups = self.groups
+
+		if 'ard_gamma' in kwargs.keys():
+			ard_gamma = kwargs['ard_gamma']
+		else:
+			ard_gamma = self.ard_gamma
+
+		(n, z) = tuple(a.size())
+		(q, m) = tuple(b.size())
+
+		r = torch.zeros(size=(q, n), dtype=torch.float64)
+
+		for group_add, gamma in zip(groups, list(ard_gamma)):
+			kwargs['group'] = group_add
+
+			# use per group lenghtscale
+			kwargs['gamma'] = gamma
+
+			r = r + self.matern_kernel(a, b, **kwargs)
+
+		r = kappa * r / float(len(groups))
+		return r
+
+	def ard_matern_per_group_kernel_additive_diag(self, a, b, **kwargs):
+		if 'kappa' in kwargs.keys():
+			kappa = kwargs['kappa']
+		else:
+			kappa = self.kappa
+
+		if 'groups' in kwargs.keys():
+			groups = kwargs['groups']
+		else:
+			groups = self.groups
+
+		if 'ard_gamma' in kwargs.keys():
+			ard_gamma = kwargs['ard_gamma']
+		else:
+			ard_gamma = self.ard_gamma
+
+		(n, z) = tuple(a.size())
+		(q, m) = tuple(b.size())
+
+		r = torch.zeros(size=(q, n), dtype=torch.float64)
+
+		for group_add, gamma in zip(groups, list(ard_gamma)):
+			kwargs['group'] = group_add
+
+			# use per group lenghtscale
+			kwargs['gamma'] = gamma
+
+			r = r + self.matern_kernel_diag(a, b, **kwargs)
+
+		r = kappa * r / float(len(groups))
+		return r
+
+
 	def ard_kernel_additive(self, a, b, **kwargs):
 		if 'kappa' in kwargs.keys():
 			kappa = kwargs['kappa']
@@ -776,10 +848,63 @@ class KernelFunction:
 		else:
 			group = self.group
 
+		a = a[:, group]#.numpy()
+		b = b[:, group]#.numpy()
+
+		dists = torch.cdist(a / gamma, b / gamma, p=2).T
+		if v == 0.5:
+			K = torch.exp(-dists)
+		elif v == 1.5:
+			K = dists * math.sqrt(3)
+			K = (1. + K) * torch.exp(-K)
+		elif v == 2.5:
+			K = dists * math.sqrt(5)
+			K = (1. + K + K ** 2 / 3.0) * torch.exp(-K)
+		else:  # general case; expensive to evaluate
+			K = dists
+			K[K == 0.0] += np.finfo(float).eps  # strict zeros result in nan
+			tmp = (math.sqrt(2 * v) * K)
+			K.fill((2 ** (1. - v)) / math.gamma(v))
+			K *= tmp ** v
+			K *= kv(v, tmp)
+		return kappa * K
+
+
+	def matern_kernel_diag(self, a, b, **kwargs):
+		"""
+		:param a: matrices
+		:param b: matrices
+		:param gamma: smoothness
+		:param v: Bessel function type
+		:return:
+		"""
+
+		if 'kappa' in kwargs.keys():
+			kappa = kwargs['kappa']
+		else:
+			kappa = self.kappa
+
+		if 'nu' in kwargs.keys():
+			v = kwargs['nu']
+		else:
+			v = self.v
+
+		if 'gamma' in kwargs.keys():
+			gamma = kwargs['gamma']
+		else:
+			gamma = self.gamma
+
+		if 'group' in kwargs.keys():
+			group = kwargs['group']
+		else:
+			group = self.group
+
 		a = a[:, group].numpy()
 		b = b[:, group].numpy()
 
-		dists = cdist(a / gamma, b / gamma, metric='euclidean').T
+		#dists = cdist(a / gamma, b / gamma, metric='euclidean').T
+		dists = torch.sqrt(torch.sum((a/gamma - b/gamma)**2))
+
 		if v == 0.5:
 			K = np.exp(-dists)
 		elif v == 1.5:

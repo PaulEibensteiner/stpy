@@ -4,7 +4,7 @@ packages = [
     'numpy',
     'scipy',
     'matplotlib',
-    'sklearn',
+    'scikit-`learn',
     'tensorflow',
     'cvxpy',
     'torch',
@@ -14,7 +14,8 @@ packages = [
     'quadprog',
     'cvxpylayers',
     'functorch',
-    'autograd_minimize'
+    'autograd_minimize',
+    'pytorch-minimize'
 ]
 #
 setup(name='stpy',

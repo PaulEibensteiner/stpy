@@ -13,18 +13,17 @@ from stpy.helpers import helper
 from stpy.optim.custom_optimizers import bisection
 
 class Estimator(ABC):
-class Estimator(ABC):
 
 	def fit(self):
 		pass
 
 
 	@abstractmethod
-	def ucb(self, x):
+	def ucb(self, x, delta = 0.1):
 		pass
 
 	@abstractmethod
-	def lcb(self, x):
+	def lcb(self, x, delta = 0.1):
 		pass
 
 	def load_data(self,d):
@@ -347,7 +346,7 @@ class Estimator(ABC):
 	# plt.show()
 
 	def visualize(self, xtest,bounds = False, f_true=None, points=True, show=True, size=2,
-				  norm=1, fig=True, sqrtbeta=2, constrained=None, d=None,
+				  norm=1, fig=True, sqrtbeta=2, constrained=None, d=None,delta = 0.9,
 				  matheron_kernel=None, color = None, label = "", visualize_point = None):
 
 		if not bounds:
@@ -356,8 +355,8 @@ class Estimator(ABC):
 			ucb = mu + sqrtbeta *std
 		else:
 			print ("using bounds")
-			lcb = self.lcb(xtest)
-			ucb = self.ucb(xtest)
+			lcb = self.lcb(xtest, delta = delta)
+			ucb = self.ucb(xtest, delta = delta)
 			mu = self.mean(xtest)
 
 		if d is None:

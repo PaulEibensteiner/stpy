@@ -6,10 +6,10 @@ from stpy.embeddings.embedding import HermiteEmbedding, RFFEmbedding, ConcatEmbe
 from stpy.embeddings.bump_bases import FaberSchauderEmbedding, TriangleEmbedding
 from stpy.embeddings.weighted_embedding import WeightedEmbedding
 from stpy.probability.gaussian_likelihood import GaussianLikelihood
-from stpy.probability.regularizer import L2Regularizer, L1Regularizer, GroupL1L2Regularizer, NonConvexLqRegularizer, GroupNonCovexLqRegularizer
+from stpy.regularization.regularizer import L2Regularizer, L1Regularizer, GroupL1L2Regularizer, NonConvexLqRegularizer, GroupNonCovexLqRegularizer
 from stpy.continuous_processes.nystrom_fea import NystromFeatures
 from stpy.helpers.helper import interval_torch
-from stpy.helpers.constraints import QuadraticInequalityConstraint, AbsoluteValueConstraint
+from stpy.regularization.constraints import QuadraticInequalityConstraint, AbsoluteValueConstraint
 from stpy.kernels import KernelFunction
 from scipy.ndimage import gaussian_filter
 

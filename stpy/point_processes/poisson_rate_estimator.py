@@ -1026,12 +1026,7 @@ class PoissonRateEstimator(RateEstimator):
 			theta.value = self.rate.numpy()
 
 		try:
-			prob.solve(solver=cp.MOSEK, warm_start=False, verbose=False,
-					   mosek_params={mosek.iparam.num_threads: threads,
-									 mosek.iparam.intpnt_solve_form: mosek.solveform.dual,
-									 mosek.dparam.intpnt_co_tol_pfeas: 1e-4,
-									 mosek.dparam.intpnt_co_tol_dfeas: 1e-4,
-									 mosek.dparam.intpnt_co_tol_rel_gap: 1e-4})
+			prob.solve(solver=cp.CLARABEL, warm_start=False, verbose=True)
 
 			self.rate = torch.from_numpy(theta.value)
 			return self.rate
@@ -1060,12 +1055,7 @@ class PoissonRateEstimator(RateEstimator):
 		#	theta.value = self.rate.numpy()
 		try:
 			prob = cp.Problem(objective, constraints)
-			prob.solve(solver=cp.MOSEK, warm_start=False, verbose=False,
-					   mosek_params={mosek.iparam.num_threads: threads,
-									 mosek.iparam.intpnt_solve_form: mosek.solveform.primal,
-									 mosek.dparam.intpnt_co_tol_pfeas: 1e-4,
-									 mosek.dparam.intpnt_co_tol_dfeas: 1e-4,
-									 mosek.dparam.intpnt_co_tol_rel_gap: 1e-4})
+			prob.solve(solver=cp.CLARABEL, warm_start=False, verbose=True)
 			self.rate = torch.from_numpy(theta.value)
 		except:
 			print("Optimization failed. Using the old value.")
@@ -1282,12 +1272,7 @@ class PoissonRateEstimator(RateEstimator):
 			+ self.s * 0.5 * cp.sum_squares(theta))
 		prob = cp.Problem(objective, constraints)
 		try:
-			prob.solve(solver=cp.MOSEK, warm_start=False, verbose=False,
-					   mosek_params={mosek.iparam.num_threads: threads,
-									 mosek.iparam.intpnt_solve_form: mosek.solveform.dual,
-									 mosek.dparam.intpnt_co_tol_pfeas: 1e-8,
-									 mosek.dparam.intpnt_co_tol_dfeas: 1e-8,
-									 mosek.dparam.intpnt_co_tol_rel_gap: 1e-8})
+			prob.solve(solver=cp.CLARABEL, warm_start=False, verbose=True)
 
 			self.rate = torch.from_numpy(theta.value)
 		except:
@@ -1314,12 +1299,7 @@ class PoissonRateEstimator(RateEstimator):
 				prob = cp.Problem(objective, constraints)
 			else:
 				prob = cp.Problem(objective)
-			prob.solve(solver=cp.MOSEK, warm_start=False, verbose=False,
-					   mosek_params={mosek.iparam.num_threads: threads,
-									 mosek.iparam.intpnt_solve_form: mosek.solveform.primal,
-									 mosek.dparam.intpnt_co_tol_pfeas: 1e-6,
-									 mosek.dparam.intpnt_co_tol_dfeas: 1e-6,
-									 mosek.dparam.intpnt_co_tol_rel_gap: 1e-6})
+			prob.solve(solver=cp.CLARABEL, warm_start=False, verbose=True)
 			self.rate = torch.from_numpy(theta.value)
 		except:
 			print("Optimization failed. Using the old value.")

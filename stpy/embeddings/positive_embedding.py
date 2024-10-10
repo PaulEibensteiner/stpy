@@ -1,7 +1,9 @@
+from typing import Optional
 import cvxpy as cp
 import mosek
 import numpy as np
 import scipy
+from stpy.kernels import KernelFunction
 import torch
 
 from stpy.borel_set import BorelSet
@@ -11,11 +13,28 @@ from stpy.helpers.helper import cartesian
 
 class PositiveEmbedding(Embedding):
 
-	def __init__(self, d, m, kernel_object=None, interval=(-1, 1), B=1, b=0, s=0.001, offset=0.):
+	def __init__(self, d, m, kernel_object: Optional[KernelFunction]=None, interval=(-1, 1), B=1, b=0, s=0.001, offset=0.):
+		"""
+
+		Parameters
+		----------
+		d
+			Dimension of the embedding
+		m
+			Number of basis functions
+		b, optional
+			Minimal value of the rate function, by default 0
+		B, optional
+			Maximal value of the rate function, by default 1
+		"""
 		self.d = d
+		""" Dimension of the embedding """
 		self.m = m
+		""" Number of basis functions """
 		self.b = b
+		""" Minimal value of the rate function """
 		self.size = self.get_m()
+		""" Number of basis functions times number of dimensions """
 		self.interval = interval
 		if kernel_object is None:
 			#self.kernel_object = KernelFunction()
@@ -42,6 +61,13 @@ class PositiveEmbedding(Embedding):
 		pass
 
 	def basis_fun(self, x, j):
+		"""
+		Return the value of basis function \phi_j(x)
+
+		:param x: double, need to be in the interval
+		:param j: integer, index of hat functions, 0 <= j <= m-1
+		:return: \phi_j(x)
+		"""
 		pass
 
 	def get_constraints(self):
@@ -52,6 +78,13 @@ class PositiveEmbedding(Embedding):
 		return (l, Lambda, u)
 
 	def cov(self, inverse=False):
+		r"""Should return $\Gamma^T = \sqrt{V^{-1} K V^{-1}}^T$
+		
+		$\sqrt{(V^TV)^* \cdot K}$ where $V_{ij} = \phi_i(t_j)$ and 
+		$K_{ij} = k(t_i, t_j)$ and the $t_i$ are equally spaced grid points
+		in the cartesian product set $i^d$ where i is `self.interval`
+
+		"""
 		if self.precomp == False:
 			dm = (self.interval[1] - self.interval[0]) / (self.m - 1)  # delta m
 			t = self.interval[0] + torch.linspace(0, self.m - 1, self.m) * dm
@@ -83,6 +116,8 @@ class PositiveEmbedding(Embedding):
 			return self.Gamma_half
 
 	def embed_internal(self, x):
+		""" Returns a tensor $T$ where $T_{i,j} = \phi_j(x_i)$. 
+		"""
 		if self.d == 1:
 			out = torch.zeros(size=(x.size()[0], self.m), dtype=torch.float64)
 			for j in range(self.m):
@@ -146,6 +181,7 @@ class PositiveEmbedding(Embedding):
 		return mode
 
 	def embed(self, x):
+		r"""Calculates $\Phi(x)^T = \phi(x)^T \Gamma^T$"""
 		Gamma_half = self.cov()
 		return self.embed_internal(x) @ Gamma_half
 

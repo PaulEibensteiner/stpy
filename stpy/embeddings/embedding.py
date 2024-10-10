@@ -118,6 +118,12 @@ class Embedding():
 		return self.m
 
 	def integral(self, S):
+		"""
+		Compute the integral of the kernel over the set S
+
+		:param S: Borel set
+		:return: array of length self.m of integrals of each basis function over the set S
+		"""
 		a = S.bounds[:, 0]
 		b = S.bounds[:, 1]
 		psi = torch.zeros(self.m).double()

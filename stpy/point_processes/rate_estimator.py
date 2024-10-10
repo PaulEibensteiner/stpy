@@ -1,3 +1,4 @@
+from typing import List
 import numpy as np
 import torch
 
@@ -15,7 +16,26 @@ class RateEstimator():
 
 		return (np.min(volumes), np.max(volumes))
 
-	def load_data(self, data, times=True):
+	def load_data(self, data: List, times=True):
+		r"""Load the data and save $\Phi(x)$ into `self.observations`, $n(A_i)$ in
+		`self.counts` and $\int_{A_i} \phi_j(x) dx$ into `self.phis`
+
+
+		Parameters
+		----------
+		data
+
+			List of samples, where each sample is a tuple of 
+
+				* The Borel set on which the data lies
+				* A tensor of the datapoints them selves i.e. of shape
+				  [num_data_points, self.d...]
+				* The amount of time in minutes that the data spans
+				  i.e. max time - min time of all data points
+		
+		times, optional
+			by default True
+		"""
 		self.approx_fit = False
 
 		if len(data) > 0:
@@ -35,7 +55,6 @@ class RateEstimator():
 
 				if obs is not None:
 					obs, _, duplicates = torch.unique(obs, dim=0, return_inverse=True, return_counts=True)
-					#obs = torch.diag(torch.exp(duplicates.double()))@obs\
 					obs = torch.einsum('ij,i->ij', obs, duplicates)
 
 					if times == True:

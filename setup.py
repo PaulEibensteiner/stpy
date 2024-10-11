@@ -4,7 +4,7 @@ packages = [
     'numpy',
     'scipy',
     'matplotlib',
-    'sklearn',
+    'scikit-learn',
     'tensorflow',
     'cvxpy',
     'torch',
@@ -13,7 +13,6 @@ packages = [
     'mosek',
     'quadprog',
     'cvxpylayers',
-    'functorch',
     'autograd_minimize'
 ]
 #

@@ -4,8 +4,6 @@ import numpy as np
 import scipy as scipy
 import torch
 from cvxpylayers.torch import CvxpyLayer
-#from functorch import hessian
-import functorch
 from pymanopt.manifolds import Euclidean, Stiefel, PSDFixedRank
 from torch.autograd import grad
 from torchmin import minimize as minimize_torch

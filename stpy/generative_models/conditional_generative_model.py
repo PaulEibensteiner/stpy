@@ -1,5 +1,7 @@
-class GenerativeModel():
+class GenerativeModel:
     pass
+
+
 class ConditionalGenerativeModel(GenerativeModel):
 
     x = np.random.randn(10)
@@ -9,6 +11,5 @@ class ConditionalGenerativeModel(GenerativeModel):
 
     # find the largest element
     np.max(x)
-    
 
     pass

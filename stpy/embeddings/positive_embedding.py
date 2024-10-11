@@ -13,194 +13,243 @@ from stpy.helpers.helper import cartesian
 
 class PositiveEmbedding(Embedding):
 
-	def __init__(self, d, m, kernel_object: Optional[KernelFunction]=None, interval=(-1, 1), B=1, b=0, s=0.001, offset=0.):
-		"""
+    def __init__(
+        self,
+        d,
+        m,
+        kernel_object: Optional[KernelFunction] = None,
+        interval=(-1, 1),
+        B=1,
+        b=0,
+        s=0.001,
+        offset=0.0,
+    ):
+        """
 
-		Parameters
-		----------
-		d
-			Dimension of the embedding
-		m
-			Number of basis functions
-		b, optional
-			Minimal value of the rate function, by default 0
-		B, optional
-			Maximal value of the rate function, by default 1
-		"""
-		self.d = d
-		""" Dimension of the embedding """
-		self.m = m
-		""" Number of basis functions """
-		self.b = b
-		""" Minimal value of the rate function """
-		self.size = self.get_m()
-		""" Number of basis functions times number of dimensions """
-		self.interval = interval
-		if kernel_object is None:
-			#self.kernel_object = KernelFunction()
-			#self.kernel = lambda x, y: self.kernel_object.kernel(x, y)
-			self.kernel = None
-		else:
-			self.kernel_object = kernel_object
-			self.kernel = self.kernel_object.kernel
-		self.B = B
-		self.s = s
-		self.offset = offset
+        Parameters
+        ----------
+        d
+                Dimension of the embedding
+        m
+                Number of basis functions
+        b, optional
+                Minimal value of the rate function, by default 0
+        B, optional
+                Maximal value of the rate function, by default 1
+        """
+        self.d = d
+        """ Dimension of the embedding """
+        self.m = m
+        """ Number of basis functions """
+        self.b = b
+        """ Minimal value of the rate function """
+        self.size = self.get_m()
+        """ Number of basis functions times number of dimensions """
+        self.interval = interval
+        if kernel_object is None:
+            # self.kernel_object = KernelFunction()
+            # self.kernel = lambda x, y: self.kernel_object.kernel(x, y)
+            self.kernel = None
+        else:
+            self.kernel_object = kernel_object
+            self.kernel = self.kernel_object.kernel
+        self.B = B
+        self.s = s
+        self.offset = offset
 
-		self.interval = (self.interval[0] - offset, self.interval[1] + offset)
+        self.interval = (self.interval[0] - offset, self.interval[1] + offset)
 
-		self.borel_set = BorelSet(d=1, bounds=torch.Tensor([[self.interval[0], self.interval[1]]]).double())
-		self.mu = None
-		self.precomp = False
-		self.procomp_integrals = {}
+        self.borel_set = BorelSet(
+            d=1, bounds=torch.Tensor([[self.interval[0], self.interval[1]]]).double()
+        )
+        self.mu = None
+        self.precomp = False
+        self.procomp_integrals = {}
 
-	def get_size(self):
-		return self.m ** self.d
+    def get_size(self):
+        return self.m**self.d
 
-	def integral(self, S):
-		pass
+    def integral(self, S):
+        pass
 
-	def basis_fun(self, x, j):
-		"""
-		Return the value of basis function \phi_j(x)
+    def basis_fun(self, x, j):
+        """
+        Return the value of basis function \phi_j(x)
 
-		:param x: double, need to be in the interval
-		:param j: integer, index of hat functions, 0 <= j <= m-1
-		:return: \phi_j(x)
-		"""
-		pass
+        :param x: double, need to be in the interval
+        :param j: integer, index of hat functions, 0 <= j <= m-1
+        :return: \phi_j(x)
+        """
+        pass
 
-	def get_constraints(self):
-		s = self.m ** self.d
-		l = torch.from_numpy(np.full(s, self.b))
-		u = torch.from_numpy(np.full(s, self.B))
-		Lambda = torch.from_numpy(np.identity(s))
-		return (l, Lambda, u)
+    def get_constraints(self):
+        s = self.m**self.d
+        l = torch.from_numpy(np.full(s, self.b))
+        u = torch.from_numpy(np.full(s, self.B))
+        Lambda = torch.from_numpy(np.identity(s))
+        return (l, Lambda, u)
 
-	def cov(self, inverse=False):
-		r"""Should return $\Gamma^T = \sqrt{V^{-1} K V^{-1}}^T$
-		
-		$\sqrt{(V^TV)^* \cdot K}$ where $V_{ij} = \phi_i(t_j)$ and 
-		$K_{ij} = k(t_i, t_j)$ and the $t_i$ are equally spaced grid points
-		in the cartesian product set $i^d$ where i is `self.interval`
+    def cov(self, inverse=False):
+        r"""Should return $\Gamma^T = \sqrt{V^{-1} K V^{-1}}^T$
 
-		"""
-		if self.precomp == False:
-			dm = (self.interval[1] - self.interval[0]) / (self.m - 1)  # delta m
-			t = self.interval[0] + torch.linspace(0, self.m - 1, self.m) * dm
+        $\sqrt{(V^TV)^* \cdot K}$ where $V_{ij} = \phi_i(t_j)$ and
+        $K_{ij} = k(t_i, t_j)$ and the $t_i$ are equally spaced grid points
+        in the cartesian product set $i^d$ where i is `self.interval`
 
-			if self.d == 1:
-				t = t.view(-1, 1).double()
-			elif self.d == 2:
-				t = torch.from_numpy(cartesian([t.numpy(), t.numpy()])).double()
-			elif self.d == 3:
-				t = torch.from_numpy(cartesian([t.numpy(), t.numpy(), t.numpy()])).double()
-			if self.kernel is not None:
-				self.Gamma = self.kernel(t, t)
-				Z = self.embed_internal(t)
-				M = torch.pinverse(Z.T @ Z + (self.s) * torch.eye(self.Gamma.size()[0]))
-				self.M = torch.from_numpy(np.real(scipy.linalg.sqrtm(M.numpy())))
-				self.Gamma_half = torch.from_numpy(
-					np.real(scipy.linalg.sqrtm(self.Gamma.numpy() + 1e-5 * (self.s ** 2) * np.eye(self.Gamma.size()[0]))))
-				self.Gamma_half = self.M @ self.Gamma_half
-				self.invGamma_half = torch.pinverse(self.Gamma_half)
-			else:
-				self.Gamma_half = torch.eye(self.m).double()
-			self.precomp = True
-		else:
-			pass
+        """
+        if self.precomp == False:
+            dm = (self.interval[1] - self.interval[0]) / (self.m - 1)  # delta m
+            t = self.interval[0] + torch.linspace(0, self.m - 1, self.m) * dm
 
-		if inverse == True:
-			return self.Gamma_half, self.invGamma_half
-		else:
-			return self.Gamma_half
+            if self.d == 1:
+                t = t.view(-1, 1).double()
+            elif self.d == 2:
+                t = torch.from_numpy(cartesian([t.numpy(), t.numpy()])).double()
+            elif self.d == 3:
+                t = torch.from_numpy(
+                    cartesian([t.numpy(), t.numpy(), t.numpy()])
+                ).double()
+            if self.kernel is not None:
+                self.Gamma = self.kernel(t, t)
+                Z = self.embed_internal(t)
+                M = torch.pinverse(Z.T @ Z + (self.s) * torch.eye(self.Gamma.size()[0]))
+                self.M = torch.from_numpy(np.real(scipy.linalg.sqrtm(M.numpy())))
+                self.Gamma_half = torch.from_numpy(
+                    np.real(
+                        scipy.linalg.sqrtm(
+                            self.Gamma.numpy()
+                            + 1e-5 * (self.s**2) * np.eye(self.Gamma.size()[0])
+                        )
+                    )
+                )
+                self.Gamma_half = self.M @ self.Gamma_half
+                self.invGamma_half = torch.pinverse(self.Gamma_half)
+            else:
+                self.Gamma_half = torch.eye(self.m).double()
+            self.precomp = True
+        else:
+            pass
 
-	def embed_internal(self, x):
-		""" Returns a tensor $T$ where $T_{i,j} = \phi_j(x_i)$. 
-		"""
-		if self.d == 1:
-			out = torch.zeros(size=(x.size()[0], self.m), dtype=torch.float64)
-			for j in range(self.m):
-				out[:, j] = self.basis_fun(x, j).view(-1)
-			return out
+        if inverse == True:
+            return self.Gamma_half, self.invGamma_half
+        else:
+            return self.Gamma_half
 
-		elif self.d == 2:
-			phi_1 = torch.cat([self.basis_fun(x[:, 0].view(-1, 1), j) for j in range(0, self.m)], dim=1)
-			phi_2 = torch.cat([self.basis_fun(x[:, 1].view(-1, 1), j) for j in range(0, self.m)], dim=1)
-			n = x.size()[0]
-			out = []
-			for i in range(n):
-				out.append(torch.from_numpy(np.kron(phi_1[i, :].numpy(), phi_2[i, :].numpy())).view(1, -1))
-			out = torch.cat(out, dim=0)
-			return out
-		elif self.d == 3:
-			phi_1 = torch.cat([self.basis_fun(x[:, 0].view(-1, 1), j) for j in range(0, self.m)], dim=1)
-			phi_2 = torch.cat([self.basis_fun(x[:, 1].view(-1, 1), j) for j in range(0, self.m)], dim=1)
-			phi_3 = torch.cat([self.basis_fun(x[:, 2].view(-1, 1), j) for j in range(0, self.m)], dim=1)
+    def embed_internal(self, x):
+        """Returns a tensor $T$ where $T_{i,j} = \phi_j(x_i)$."""
+        if self.d == 1:
+            out = torch.zeros(size=(x.size()[0], self.m), dtype=torch.float64)
+            for j in range(self.m):
+                out[:, j] = self.basis_fun(x, j).view(-1)
+            return out
 
-			n = x.size()[0]
-			out = []
-			for i in range(n):
-				out.append(
-					torch.from_numpy(np.kron(phi_3[i, :], np.kron(phi_1[i, :].numpy(), phi_2[i, :].numpy()))).view(1,
-																												   -1))
-			out = torch.cat(out, dim=0)
-			return out
+        elif self.d == 2:
+            phi_1 = torch.cat(
+                [self.basis_fun(x[:, 0].view(-1, 1), j) for j in range(0, self.m)],
+                dim=1,
+            )
+            phi_2 = torch.cat(
+                [self.basis_fun(x[:, 1].view(-1, 1), j) for j in range(0, self.m)],
+                dim=1,
+            )
+            n = x.size()[0]
+            out = []
+            for i in range(n):
+                out.append(
+                    torch.from_numpy(
+                        np.kron(phi_1[i, :].numpy(), phi_2[i, :].numpy())
+                    ).view(1, -1)
+                )
+            out = torch.cat(out, dim=0)
+            return out
+        elif self.d == 3:
+            phi_1 = torch.cat(
+                [self.basis_fun(x[:, 0].view(-1, 1), j) for j in range(0, self.m)],
+                dim=1,
+            )
+            phi_2 = torch.cat(
+                [self.basis_fun(x[:, 1].view(-1, 1), j) for j in range(0, self.m)],
+                dim=1,
+            )
+            phi_3 = torch.cat(
+                [self.basis_fun(x[:, 2].view(-1, 1), j) for j in range(0, self.m)],
+                dim=1,
+            )
 
-	def fit(self, x, y, already_embeded=False):
-		m = self.get_m()
+            n = x.size()[0]
+            out = []
+            for i in range(n):
+                out.append(
+                    torch.from_numpy(
+                        np.kron(
+                            phi_3[i, :],
+                            np.kron(phi_1[i, :].numpy(), phi_2[i, :].numpy()),
+                        )
+                    ).view(1, -1)
+                )
+            out = torch.cat(out, dim=0)
+            return out
 
-		l, Lambda, u = self.get_constraints()
-		Gamma_half = self.cov()
+    def fit(self, x, y, already_embeded=False):
+        m = self.get_m()
 
-		if already_embeded == False:
-			Phi = self.embed(x).numpy()
-		else:
-			Phi = x.numpy()
+        l, Lambda, u = self.get_constraints()
+        Gamma_half = self.cov()
 
-		xi = cp.Variable(m)
-		obj = cp.Minimize(self.s ** 2 * cp.norm2(xi) + cp.sum_squares(Phi @ xi - y.numpy().reshape(-1)))
+        if already_embeded == False:
+            Phi = self.embed(x).numpy()
+        else:
+            Phi = x.numpy()
 
-		constraints = []
-		Lambda = Lambda @ Gamma_half.numpy()
-		if not np.all(l == -np.inf):
-			constraints.append(Lambda[l != -np.inf] @ xi >= l[l != -np.inf])
-		if not np.all(u == np.inf):
-			constraints.append(Lambda[u != np.inf] @ xi <= u[u != np.inf])
+        xi = cp.Variable(m)
+        obj = cp.Minimize(
+            self.s**2 * cp.norm2(xi) + cp.sum_squares(Phi @ xi - y.numpy().reshape(-1))
+        )
 
-		prob = cp.Problem(obj, constraints)
-		prob.solve(solver=cp.MOSEK, warm_start=False,
-				   verbose=False, mosek_params={mosek.iparam.intpnt_solve_form: mosek.solveform.dual})
+        constraints = []
+        Lambda = Lambda @ Gamma_half.numpy()
+        if not np.all(l == -np.inf):
+            constraints.append(Lambda[l != -np.inf] @ xi >= l[l != -np.inf])
+        if not np.all(u == np.inf):
+            constraints.append(Lambda[u != np.inf] @ xi <= u[u != np.inf])
 
-		if prob.status != "optimal":
-			raise ValueError('cannot compute the mode')
+        prob = cp.Problem(obj, constraints)
+        prob.solve(
+            solver=cp.MOSEK,
+            warm_start=False,
+            verbose=False,
+            mosek_params={mosek.iparam.intpnt_solve_form: mosek.solveform.dual},
+        )
 
-		mode = xi.value
-		self.mode = torch.from_numpy(mode).view(-1, 1)
-		self.mu = self.mode
-		return mode
+        if prob.status != "optimal":
+            raise ValueError("cannot compute the mode")
 
-	def embed(self, x):
-		r"""Calculates $\Phi(x)^T = \phi(x)^T \Gamma^T$"""
-		Gamma_half = self.cov()
-		return self.embed_internal(x) @ Gamma_half
+        mode = xi.value
+        self.mode = torch.from_numpy(mode).view(-1, 1)
+        self.mu = self.mode
+        return mode
 
-	def mean(self, xtest):
-		embeding = self.embed(xtest)
-		mean = embeding @ self.mu
-		return mean
+    def embed(self, x):
+        r"""Calculates $\Phi(x)^T = \phi(x)^T \Gamma^T$"""
+        Gamma_half = self.cov()
+        return self.embed_internal(x) @ Gamma_half
 
-	def mean_std(self, xtest):
-		embeding = self.embed(xtest)
-		mean = embeding @ self.mu
-		return mean, None
+    def mean(self, xtest):
+        embeding = self.embed(xtest)
+        mean = embeding @ self.mu
+        return mean
 
-	def sample_theta(self):
-		self.mu = torch.randn(size=(self.get_m(), 1))
-		return self.mu
+    def mean_std(self, xtest):
+        embeding = self.embed(xtest)
+        mean = embeding @ self.mu
+        return mean, None
 
-	def sample(self, xtest, size=1):
-		return self.embed(xtest) @ self.sample_theta()
+    def sample_theta(self):
+        self.mu = torch.randn(size=(self.get_m(), 1))
+        return self.mu
 
-	def get_m(self):
-		return self.m ** self.d
+    def sample(self, xtest, size=1):
+        return self.embed(xtest) @ self.sample_theta()
+
+    def get_m(self):
+        return self.m**self.d

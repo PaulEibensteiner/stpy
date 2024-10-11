@@ -6,6 +6,7 @@ from stpy.helpers.helper import interval_torch
 from stpy.kernels import KernelFunction
 from stpy.regularization.simplex_regularizer import SupRegularizer
 from stpy.continuous_processes.mkl_estimator import MultipleKernelLearner
+
 """
 This script test and compares Lq estimators 
  compare L1, L2 and Lq estimators
@@ -14,35 +15,41 @@ This script test and compares Lq estimators
 m = 128
 d = 1
 sigma = 0.01
-lam = 1.
+lam = 1.0
 n = 128
 N = 10
 
-kernel_object = KernelFunction(gamma = 0.05, d = 1)
-#embedding = HermiteEmbedding(m = m, d = 1)
-xtest = interval_torch(n = n,d = 1)
+kernel_object = KernelFunction(gamma=0.05, d=1)
+# embedding = HermiteEmbedding(m = m, d = 1)
+xtest = interval_torch(n=n, d=1)
 
-embedding1 = NystromFeatures(kernel_object = kernel_object, m = m )
-embedding1.fit_gp(xtest/2-0.7,None)
-embedding2 = NystromFeatures(kernel_object = kernel_object, m = m )
-embedding2.fit_gp(xtest/2+0.7,None)
-embedding = ConcatEmbedding([embedding1,embedding2])
+embedding1 = NystromFeatures(kernel_object=kernel_object, m=m)
+embedding1.fit_gp(xtest / 2 - 0.7, None)
+embedding2 = NystromFeatures(kernel_object=kernel_object, m=m)
+embedding2.fit_gp(xtest / 2 + 0.7, None)
+embedding = ConcatEmbedding([embedding1, embedding2])
 
-def k1(x,y,**kwagrs):
-    return (embedding1.embed(x)@embedding1.embed(y).T).T
 
-def k2(x,y,**kwagrs):
-    return (embedding2.embed(x)@embedding2.embed(y).T).T
+def k1(x, y, **kwagrs):
+    return (embedding1.embed(x) @ embedding1.embed(y).T).T
 
-kernel_object_1 = KernelFunction(kernel_function = k1)
-kernel_object_2 = KernelFunction(kernel_function = k2)
+
+def k2(x, y, **kwagrs):
+    return (embedding2.embed(x) @ embedding2.embed(y).T).T
+
+
+kernel_object_1 = KernelFunction(kernel_function=k1)
+kernel_object_2 = KernelFunction(kernel_function=k2)
 
 kernels = [kernel_object_1, kernel_object_2]
 regularizer = SupRegularizer(d=len(kernels), lam=0.99, constrained=True)
 mkl = MultipleKernelLearner(kernels, regularizer=regularizer)
 
-f = lambda x: torch.sin(x*20)*(x<0).double() + (1e-5)*torch.sin(x*20)*(x>0).double()
-Xtrain = interval_torch(n = N, d= 1, L_infinity_ball=0.25) - 0.75
+f = (
+    lambda x: torch.sin(x * 20) * (x < 0).double()
+    + (1e-5) * torch.sin(x * 20) * (x > 0).double()
+)
+Xtrain = interval_torch(n=N, d=1, L_infinity_ball=0.25) - 0.75
 ytrain = f(Xtrain)
 
 #
@@ -85,9 +92,9 @@ ytrain = f(Xtrain)
 mkl.load_data((Xtrain, ytrain))
 mkl.fit()
 mean = mkl.mean(xtest)
-p = plt.plot(xtest, mean, label="MKL", linestyle="-", lw=3, color='tab:purple')
+p = plt.plot(xtest, mean, label="MKL", linestyle="-", lw=3, color="tab:purple")
 
-plt.plot(Xtrain,ytrain,'ko', lw = 3)
-plt.plot(xtest,f(xtest),'k--', lw = 3)
+plt.plot(Xtrain, ytrain, "ko", lw=3)
+plt.plot(xtest, f(xtest), "k--", lw=3)
 plt.legend()
 plt.show()

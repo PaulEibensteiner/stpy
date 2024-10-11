@@ -48,7 +48,7 @@ class AbsoluteValueConstraint(Constraints):
 
     def __init__(self, c=None):
         if c is None:
-            self.c = 1.
+            self.c = 1.0
         else:
             self.c = c
 
@@ -65,7 +65,7 @@ class QuadraticInequalityConstraint(Constraints):
     def __init__(self, Q, b=None, c=None):
         self.Q = Q
         if c is None:
-            self.c = 1.
+            self.c = 1.0
         else:
             self.c = c
         if b is None:
@@ -87,7 +87,6 @@ class NonConvexGroupNormConstraint(Constraints):
         self.groups = groups
         self.convex = False
 
-
     def get_list_cvxpy_constraints(self, theta):
         w = self.q / (1 - self.q)
         set_of_constraints = []
@@ -97,7 +96,7 @@ class NonConvexGroupNormConstraint(Constraints):
             # l1 constraint
             constraints = []
             weights = np.ones(d) * w
-            weights[i] = 1.
+            weights[i] = 1.0
             group = self.groups[i]
             constraints.append(cp.norm(theta[group]).T * weights[i] <= self.c)
             # l_infinity constraint
@@ -113,6 +112,7 @@ class NonConvexGroupNormConstraint(Constraints):
     def get_constraint_cvxpy(self, theta):
         ## Does not work for non-convex constraints
         return None
+
 
 class NonConvexNormConstraint(Constraints):
 
@@ -132,7 +132,7 @@ class NonConvexNormConstraint(Constraints):
             polytope = copy.copy(square)
             zero = np.zeros(d).reshape(1, -1)
             appex = copy.copy(zero)
-            appex[0, i // 2] = (float(i % 2) - 0.5) * 2.
+            appex[0, i // 2] = (float(i % 2) - 0.5) * 2.0
             polytope = np.concatenate((appex, polytope))
             self.vertex_description.append(polytope)
             self.polyhedra_vertex_description.append(polytope)
@@ -167,7 +167,7 @@ class NonConvexNormConstraint(Constraints):
             # l1 constraint
             constraints = []
             weights = np.ones(self.d) * w
-            weights[i] = 1.
+            weights[i] = 1.0
             constraints.append(cp.abs(theta).T @ weights <= self.c)
             # l_infinity constraint
             for j in range(self.d):

@@ -4,7 +4,12 @@ import numpy as np
 import torch
 
 
-from stpy.embeddings.embedding import HermiteEmbedding, RFFEmbedding, ConcatEmbedding, MaskedEmbedding
+from stpy.embeddings.embedding import (
+    HermiteEmbedding,
+    RFFEmbedding,
+    ConcatEmbedding,
+    MaskedEmbedding,
+)
 from stpy.kernels import KernelFunction
 from stpy.helpers.helper import interval, interval_torch
 from stpy.probability.gaussian_likelihood import GaussianLikelihood
@@ -21,12 +26,14 @@ if __name__ == "__main__":
     m = 32
 
     def stable_rank(A):
-        return np.trace(A)/np.max(np.linalg.eigh(A)[0])
-
+        return np.trace(A) / np.max(np.linalg.eigh(A)[0])
 
     V = torch.linalg.qr(torch.randn(size=(m, m)).double())[0]
 
-    f = lambda x: 0.5*torch.sin(x * 20) * (x > 0).double() + 0.5*torch.sin(x * 30) * (x > 0).double()
+    f = (
+        lambda x: 0.5 * torch.sin(x * 20) * (x > 0).double()
+        + 0.5 * torch.sin(x * 30) * (x > 0).double()
+    )
     Xtrain = interval_torch(n=N, d=1)
     ytrain = f(Xtrain)
 
@@ -45,8 +52,8 @@ if __name__ == "__main__":
     A1 = cp.Variable((m // 2, m // 2), PSD=True)
     A2 = cp.Variable((m // 2, m // 2), PSD=True)
     A3 = cp.Variable((m // 2, m // 2))
-    l = cp.Variable((1,1))
-    s = cp.Parameter((1, 1), nonneg = True)
+    l = cp.Variable((1, 1))
+    s = cp.Parameter((1, 1), nonneg=True)
 
     likelihood = GaussianLikelihood(sigma=s)
     estimator = RegularizedDictionary(embedding, likelihood)
@@ -55,43 +62,61 @@ if __name__ == "__main__":
     likelihood = estimator.likelihood
     likelihood.load_data(data)
 
-    total_trace = 2.
+    total_trace = 2.0
     objective = likelihood.get_objective_cvxpy()(theta)
     A = cp.bmat([[A1, A3], [A3, A2]])
-    s.value = np.array([[1.]])
-    constraints = [cp.matrix_frac(theta, A) <= 1, cp.trace(A) <= total_trace*l, A >> 0,cp.lambda_max(A)<=l]
+    s.value = np.array([[1.0]])
+    constraints = [
+        cp.matrix_frac(theta, A) <= 1,
+        cp.trace(A) <= total_trace * l,
+        A >> 0,
+        cp.lambda_max(A) <= l,
+    ]
     prob = cp.Problem(cp.Minimize(objective), constraints)
     prob.solve(solver=cp.MOSEK, verbose=True)
 
     estimator.theta_fit = theta.value
     estimator.fitted = True
-    print (prob.value)
-    print (np.max(np.linalg.eigh(A.value)[0]))
-    print (l.value)
+    print(prob.value)
+    print(np.max(np.linalg.eigh(A.value)[0]))
+    print(l.value)
     print("--------------")
 
     if theta.value is not None:
         mu = estimator.mean(xtest)
-        plt.plot(xtest,mu, 'b', lw = 3, label = 'opt')
+        plt.plot(xtest, mu, "b", lw=3, label="opt")
 
-    plt.plot(Xtrain,ytrain,'ko', lw = 3)
-    plt.plot(xtest,f(xtest),'k--', lw = 3)
+    plt.plot(Xtrain, ytrain, "ko", lw=3)
+    plt.plot(xtest, f(xtest), "k--", lw=3)
 
-    constraints = [cp.matrix_frac(theta, A) <= 1, cp.trace(A) <= total_trace*l, A >> 0,cp.lambda_max(A)<=l, l<=s]
+    constraints = [
+        cp.matrix_frac(theta, A) <= 1,
+        cp.trace(A) <= total_trace * l,
+        A >> 0,
+        cp.lambda_max(A) <= l,
+        l <= s,
+    ]
     prob = cp.Problem(cp.Minimize(objective), constraints)
     prob.solve(solver=cp.MOSEK, verbose=True)
 
     def cost(z):
         s.value = z
         prob.solve()
-        return prob.value, total_trace * l.value, l.value,  (np.max(np.linalg.eigh(A.value)[0])), np.trace(A.value), stable_rank(A.value)
+        return (
+            prob.value,
+            total_trace * l.value,
+            l.value,
+            (np.max(np.linalg.eigh(A.value)[0])),
+            np.trace(A.value),
+            stable_rank(A.value),
+        )
 
-    z_vals = np.logspace(-5,5,20, base = 2)
+    z_vals = np.logspace(-5, 5, 20, base=2)
     l_vals = []
     eigvals = []
     differences = []
     for z in z_vals:
-        prob_val, _, l_val, eigv, _ , _  = cost(np.array([[z]]))
+        prob_val, _, l_val, eigv, _, _ = cost(np.array([[z]]))
         estimator.theta_fit = theta.value
         estimator.fitted = True
         mu = estimator.mean(xtest)
@@ -99,18 +124,17 @@ if __name__ == "__main__":
         eigvals.append(float(eigv))
         differences.append(float(l_val) - float(eigv))
 
-        print (z, float(l_val) - float(eigv))
+        print(z, float(l_val) - float(eigv))
 
-        if float(l_val) - float(eigv) <= 1e-2 and float(l_val) - float(eigv)>=0:
-            plt.plot(xtest,mu, 'g--', lw = 3, label = 'stable-rank')
+        if float(l_val) - float(eigv) <= 1e-2 and float(l_val) - float(eigv) >= 0:
+            plt.plot(xtest, mu, "g--", lw=3, label="stable-rank")
     plt.show()
 
-    plt.plot(z_vals.reshape(-1),l_vals, label = 'lvals')
-    plt.plot(z_vals.reshape(-1),eigvals, label = 'eig')
+    plt.plot(z_vals.reshape(-1), l_vals, label="lvals")
+    plt.plot(z_vals.reshape(-1), eigvals, label="eig")
     # plt.plot(z_vals.reshape(-1), differences, label='diff')
     plt.legend()
     plt.show()
-
 
     #
     # # Fix an eigenvector

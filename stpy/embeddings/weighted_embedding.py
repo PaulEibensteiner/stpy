@@ -5,11 +5,7 @@ from stpy.embeddings.embedding import Embedding
 
 class WeightedEmbedding(Embedding):
 
-    def __init__(self,
-                 embedding: Embedding,
-                 weights = None,
-                 weight_function = None
-                 ):
+    def __init__(self, embedding: Embedding, weights=None, weight_function=None):
         self.base_embedding = embedding
         self.m = self.base_embedding.get_m()
         self.weights = weights
@@ -29,8 +25,3 @@ class WeightedEmbedding(Embedding):
             return Phi @ np.diag(self.weights)
         else:
             return Phi @ np.diag(self.weight_function(self.base_embedding))
-
-
-
-
-

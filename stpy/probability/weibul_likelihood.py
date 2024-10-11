@@ -15,21 +15,19 @@ class WeilbullLikelihoodCanonical(Likelihood):
     def information_matrix(self, theta_fit):
         pass
 
-
     def normalization(self, d):
         pass
 
-
-    def evaluate_datapoint(self, theta, d, mask = None):
+    def evaluate_datapoint(self, theta, d, mask=None):
         if mask is None:
-            mask = 1.
+            mask = 1.0
         x, y = d
         lam = torch.exp(x @ theta)
         l = -torch.log(lam) + (y ** (self.p)) * lam
         l = l * mask
         return l
 
-    def scale(self, err = None, bound = None):
+    def scale(self, err=None, bound=None):
         return np.exp(bound)
 
     def add_data_point(self, d):
@@ -50,33 +48,44 @@ class WeilbullLikelihoodCanonical(Likelihood):
 
     def get_objective_cvxpy(self, mask=None):
         if mask is None:
+
             def likelihood(theta):
-                return -cp.sum(self.x@theta) + cp.sum(cp.diag(self.y**(self.p))@cp.exp(self.x @ theta))
+                return -cp.sum(self.x @ theta) + cp.sum(
+                    cp.diag(self.y ** (self.p)) @ cp.exp(self.x @ theta)
+                )
+
         else:
+
             def likelihood(theta):
-                if torch.sum(mask.int())>0:
-                    return - cp.sum(self.x[mask,:] @ theta) + cp.sum(cp.diag(self.y[mask,:]**(self.p))@cp.exp(self.x[mask,:] @ theta))
+                if torch.sum(mask.int()) > 0:
+                    return -cp.sum(self.x[mask, :] @ theta) + cp.sum(
+                        cp.diag(self.y[mask, :] ** (self.p))
+                        @ cp.exp(self.x[mask, :] @ theta)
+                    )
                 else:
                     return cp.sum(theta * 0)
+
         return likelihood
 
-    def get_confidence_set_cvxpy(self,
-                                 theta: cp.Variable,
-                                 type: Union[str, None] = None,
-                                 params: Dict = {},
-                                 delta: float = 0.1):
+    def get_confidence_set_cvxpy(
+        self,
+        theta: cp.Variable,
+        type: Union[str, None] = None,
+        params: Dict = {},
+        delta: float = 0.1,
+    ):
         if self.fitted == True:
             return self.set_fn(theta)
 
-        theta_fit = params['estimate']
-        H = params['regularizer_hessian']
+        theta_fit = params["estimate"]
+        H = params["regularizer_hessian"]
 
         beta = self.confidence_parameter(delta, params, type=type)
 
         if type in ["laplace"]:
             V = self.information_matrix(theta_fit)
             if H is not None:
-                 V += H
+                V += H
             self.set_fn = lambda theta: [cp.quad_form(theta - theta_fit, V) <= beta]
             set = self.set_fn(theta)
 
@@ -84,18 +93,22 @@ class WeilbullLikelihoodCanonical(Likelihood):
             set = self.lr_confidence_set_cvxpy(theta, beta, params)
 
         else:
-            raise NotImplementedError("The desired confidence set type is not supported.")
+            raise NotImplementedError(
+                "The desired confidence set type is not supported."
+            )
 
         self.set = set
         self.fitted = True
         return set
 
-    def confidence_parameter(self, delta, params, type = None):
+    def confidence_parameter(self, delta, params, type=None):
         if type == "LR":
             # this is based on sequential LR test
             beta = self.confidence_parameter_likelihood_ratio(delta, params)
         elif type == "laplace":
-            beta = 2.
+            beta = 2.0
         else:
-            raise NotImplementedError("The desired confidence set type is not supported.")
+            raise NotImplementedError(
+                "The desired confidence set type is not supported."
+            )
         return beta

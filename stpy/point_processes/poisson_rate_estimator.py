@@ -1,7 +1,11 @@
+from typing import Optional
 import cvxpy as cp
 import mosek
 import numpy as np
 import scipy
+from stpy.borel_set import HierarchicalBorelSets
+from stpy.embeddings.embedding import Embedding
+from stpy.kernels import KernelFunction
 import torch
 from autograd_minimize import minimize
 from quadprog import solve_qp
@@ -26,23 +30,22 @@ class PoissonRateEstimator(RateEstimator):
 
     def __init__(
         self,
-        process,
-        hierarchy,
-        d=1,
-        m=100,
-        kernel_object=None,
-        B=1.0,
+        anchor_hierarchy: HierarchicalBorelSets,
+        d: int = 1,
+        basis_size_per_dim: int = 100,
+        kernel: Optional[KernelFunction] = None,
+        max_intensity: float = 1.0,
         s=1.0,
         jitter=10e-8,
-        b=0.0,
-        basis="triangle",
-        estimator="likelihood",
-        feedback="count-record",
+        min_intensity: float = 0.0,
+        basis: str = "triangle",
+        estimator: str = "likelihood",
+        feedback_type: str = "count-record",
         offset=0.1,
         uncertainty="laplace",
         approx=None,
-        stepsize=None,
-        embedding=None,
+        sampling_stepsize=None,
+        embedding: Optional[Embedding] = None,
         beta=2.0,
         sampling="proximal+prox",
         peeking=True,
@@ -50,32 +53,33 @@ class PoissonRateEstimator(RateEstimator):
         var_cor_on=True,
         samples_nystrom=15000,
         inverted_constraint=False,
-        steps=None,
-        dual=True,
+        langevine_sampling_steps=None,
+        use_anchors=True,
         no_anchor_points=1024,
         U=1.0,
-        opt="torch",
+        optimization_library="torch",
     ):
-
-        self.process = process
         self.d = d
+        """ Dimension of the data """
         self.s = s
-        self.b = b
-        self.B = B
+        self.b = min_intensity
+        """ Minimal value of the intensity function """
+        self.B = max_intensity
+        """ Maximal value of the intensity function """
         self.U = U
-        self.stepsize = stepsize
+        self.stepsize = sampling_stepsize
         self.sampling = sampling
-        self.steps = steps
-        self.opt = opt
-        self.kernel_object = kernel_object
+        self.steps = langevine_sampling_steps
+        self.optimization_library = optimization_library
+        self.kernel = kernel
         # set hierarchy
         self.constraints = constraints
-        self.hierarchy = hierarchy
+        self.hierarchy = anchor_hierarchy
         self.ucb_identified = False
         self.inverted_constraint = inverted_constraint
         # approximation
         self.loglikelihood = 0.0
-        self.dual = dual
+        self.dual = use_anchors
         self.peeking = peeking
         self.no_anchor_points = no_anchor_points
         if beta < 0.0:
@@ -87,40 +91,40 @@ class PoissonRateEstimator(RateEstimator):
         if basis == "triangle":
             self.packing = TriangleEmbedding(
                 d,
-                m,
-                kernel_object=kernel_object,
-                B=B,
-                b=b,
+                basis_size_per_dim,
+                kernel_object=kernel,
+                B=max_intensity,
+                b=min_intensity,
                 offset=offset,
                 s=np.sqrt(jitter),
             )
         elif basis == "bernstein":
             self.packing = BernsteinEmbedding(
                 d,
-                m,
-                kernel_object=kernel_object,
-                B=B,
-                b=b,
+                basis_size_per_dim,
+                kernel_object=kernel,
+                B=max_intensity,
+                b=min_intensity,
                 offset=offset,
                 s=np.sqrt(jitter),
             )
         elif basis == "splines":
             self.packing = BernsteinSplinesEmbedding(
                 d,
-                m,
-                kernel_object=kernel_object,
-                B=B,
-                b=b,
+                basis_size_per_dim,
+                kernel_object=kernel,
+                B=max_intensity,
+                b=min_intensity,
                 offset=offset,
                 s=np.sqrt(jitter),
             )
         elif basis == "nystrom":
             self.packing = PositiveNystromEmbeddingBump(
                 d,
-                m,
-                kernel_object=kernel_object,
-                B=B,
-                b=b,
+                basis_size_per_dim,
+                kernel_object=kernel,
+                B=max_intensity,
+                b=min_intensity,
                 offset=offset,
                 s=np.sqrt(jitter),
                 samples=samples_nystrom,
@@ -128,39 +132,41 @@ class PoissonRateEstimator(RateEstimator):
         elif basis == "overlap-splines":
             self.packing = BernsteinSplinesOverlapping(
                 d,
-                m,
-                kernel_object=kernel_object,
-                B=B,
-                b=b,
+                basis_size_per_dim,
+                kernel_object=kernel,
+                B=max_intensity,
+                b=min_intensity,
                 offset=offset,
                 s=np.sqrt(jitter),
             )
         elif basis == "faber":
             self.packing = FaberSchauderEmbedding(
                 d,
-                m,
-                kernel_object=kernel_object,
-                B=B,
-                b=b,
+                basis_size_per_dim,
+                kernel_object=kernel,
+                B=max_intensity,
+                b=min_intensity,
                 offset=offset,
                 s=np.sqrt(jitter),
             )
         elif basis == "optimal-positive":
             self.packing = OptimalPositiveBasis(
                 d,
-                m,
-                kernel_object=kernel_object,
-                B=B,
-                b=b,
+                basis_size_per_dim,
+                kernel_object=kernel,
+                B=max_intensity,
+                b=min_intensity,
                 offset=offset,
                 s=np.sqrt(jitter),
                 samples=samples_nystrom,
             )
         elif basis == "custom":
+            assert embedding is not None
             self.packing = embedding
         else:
             raise NotImplementedError("The request positive basis is not implemented.")
-        self.m = m
+        self.m = basis_size_per_dim
+        """ Number of basis functions per dimension """
         self.data = None
         self.covariance = False
 
@@ -173,7 +179,7 @@ class PoissonRateEstimator(RateEstimator):
 
         # properties of rate estimator
         self.estimator = estimator
-        self.feedback = feedback
+        self.feedback = feedback_type
         self.uncertainty = uncertainty
         self.approx = approx
 
@@ -206,7 +212,7 @@ class PoissonRateEstimator(RateEstimator):
             self.global_dt = 0.0
             self.anchor_points_emb = self.packing.embed(self.anchor_points)
 
-        if feedback == "count-record" and basis != "custom":
+        if feedback_type == "count-record" and basis != "custom":
             print("Precomputing phis.")
             for index_set, set in enumerate(self.basic_sets):
                 self.varphis[index_set, :] = self.packing.integral(set)
@@ -284,9 +290,9 @@ class PoissonRateEstimator(RateEstimator):
             if self.feedback == "count-record":
 
                 if self.estimator == "likelihood":
-                    if self.opt == "cvxpy":
+                    if self.optimization_library == "cvxpy":
                         self.penalized_likelihood(threads=threads)
-                    elif self.opt == "torch":
+                    elif self.optimization_library == "torch":
                         self.penalized_likelihood_fast(threads=threads)
                     else:
                         raise NotImplementedError(
@@ -1188,7 +1194,7 @@ class PoissonRateEstimator(RateEstimator):
     def sample_variational(self, xtest, accuracy=1e-4, verbose=False, samples=1):
         from stpy.approx_inference.variational_mf import VMF_SGCP
 
-        cov_params = [self.kernel_object.kappa, self.kernel_object.gamma]
+        cov_params = [self.kernel.kappa, self.kernel.gamma]
         S_borders = np.array([[-1.0, 1.0]])
         num_inducing_points = self.m
         num_integration_points = 256

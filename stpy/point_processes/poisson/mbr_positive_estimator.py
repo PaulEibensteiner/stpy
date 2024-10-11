@@ -52,7 +52,7 @@ class MBRPositiveEstimator(PermanentalProcessRateEstimator):
             emb = self.product_integral(S) * dt
             mu = torch.trace(emb @ self.rate).view(1, 1)
         else:
-            mu = self.b * S.volume()
+            mu = self.min_intensity * S.volume()
         return mu
 
     def penalized_likelihood(self, threads=4):
@@ -221,7 +221,11 @@ class MBRPositiveEstimator(PermanentalProcessRateEstimator):
     def mean_var_reg_set(self, S, dt=1.0, beta=2.0, lcb_compute=False):
 
         if self.data is None:
-            return S.volume() * self.b, S.volume() * self.B, S.volume() * self.b
+            return (
+                S.volume() * self.min_intensity,
+                S.volume() * self.B,
+                S.volume() * self.min_intensity,
+            )
 
         if self.approx_fit == False:
             self.W = self.construct_covariance_matrix()
@@ -284,7 +288,7 @@ class MBRPositiveEstimator(PermanentalProcessRateEstimator):
             if maximization == True:
                 return S.volume() * dt * self.B
             else:
-                return S.volume() * dt * self.b
+                return S.volume() * dt * self.min_intensity
         else:
             emb = self.product_integral(S)
             cost = torch.trace(self.rate @ emb)
@@ -305,7 +309,7 @@ class MBRPositiveEstimator(PermanentalProcessRateEstimator):
         """
 
         if self.data is None:
-            return (self.B - self.b) * S.volume() / w(S)
+            return (self.B - self.min_intensity) * S.volume() / w(S)
 
         if self.ucb_identified == False:
             print("Recomputing UCB.....")

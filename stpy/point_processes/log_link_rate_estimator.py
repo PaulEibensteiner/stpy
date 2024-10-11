@@ -243,8 +243,8 @@ class LogGaussProcessRateEstimator(PermanentalProcessRateEstimator):
         xtest = S.return_discretization(n)
         if self.data is None:
             return (
-                self.b + 0 * xtest[:, 0].view(-1, 1),
-                self.b + 0 * xtest[:, 0].view(-1, 1),
+                self.min_intensity + 0 * xtest[:, 0].view(-1, 1),
+                self.min_intensity + 0 * xtest[:, 0].view(-1, 1),
                 self.B + 0 * xtest[:, 0].view(-1, 1),
             )
 

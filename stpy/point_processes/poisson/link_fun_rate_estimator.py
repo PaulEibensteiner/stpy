@@ -140,7 +140,7 @@ class PermanentalProcessRateEstimator(PoissonRateEstimator):
 
     def get_constraints(self):
         s = self.get_m()
-        l = np.full(s, self.b)
+        l = np.full(s, self.min_intensity)
         u = np.full(s, self.B)
         Lambda = np.identity(s)
         return (l, Lambda, u)
@@ -251,7 +251,7 @@ class PermanentalProcessRateEstimator(PoissonRateEstimator):
                     ].view(1, -1)
                     k = np.maximum(
                         torch.dot(self.observations[i, :], self.rate.view(-1)) ** 2,
-                        self.b,
+                        self.min_intensity,
                     )
                     W = W + A / k
             W += 2 * self.sumLambda
@@ -300,7 +300,7 @@ class PermanentalProcessRateEstimator(PoissonRateEstimator):
         if self.data is None:
             return (
                 0 * xtest[:, 0].view(-1, 1),
-                self.b + 0 * xtest[:, 0].view(-1, 1),
+                self.min_intensity + 0 * xtest[:, 0].view(-1, 1),
                 self.B + 0 * xtest[:, 0].view(-1, xtest.size()[0]),
             )
         self.fit_ellipsoid_approx()
@@ -335,8 +335,8 @@ class PermanentalProcessRateEstimator(PoissonRateEstimator):
         xtest = S.return_discretization(n)
         if self.data is None:
             return (
-                self.b + 0 * xtest[:, 0].view(-1, 1),
-                self.b + 0 * xtest[:, 0].view(-1, 1),
+                self.min_intensity + 0 * xtest[:, 0].view(-1, 1),
+                self.min_intensity + 0 * xtest[:, 0].view(-1, 1),
                 self.B + 0 * xtest[:, 0].view(-1, 1),
             )
 
@@ -467,7 +467,11 @@ if __name__ == "__main__":
     k = KernelFunction(gamma=gamma)
 
     estimator5 = PoissonRateEstimator(
-        process, hierarchical_structure, kernel_object=k, B=B, m=m, d=d
+        hierarchical_structure,
+        kernel=k,
+        max_intensity=B,
+        basis_size_per_dim=m,
+        d=d,
     )
 
     estimator4 = PermanentalProcessRateEstimator(

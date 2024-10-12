@@ -285,7 +285,12 @@ class PoissonRateEstimator(RateEstimator):
     def cov(self, inverse=False):
         return self.packing.cov(inverse=inverse)
 
-    def fit_gp(self, threads=4, optimization_library=None):
+    def fit_gp(
+        self,
+        threads=4,
+        optimization_library=None,
+        device: torch.device = torch.get_default_device(),
+    ):
         optimization_library = (
             optimization_library
             if optimization_library is not None
@@ -299,7 +304,7 @@ class PoissonRateEstimator(RateEstimator):
                     if optimization_library == "cvxpy":
                         self.penalized_likelihood(threads=threads)
                     elif optimization_library == "torch":
-                        self.penalized_likelihood_fast(threads=threads)
+                        self.penalized_likelihood_fast(device=device)
                     else:
                         raise NotImplementedError(
                             "The optimization method does not exist"
@@ -1274,58 +1279,68 @@ class PoissonRateEstimator(RateEstimator):
         ucb = torch.quantile(paths, 1 - delta, dim=0)
         return lcb, ucb
 
-    def penalized_likelihood_fast(self, threads=4):
+    def penalized_likelihood_fast(
+        self, device: torch.device = torch.get_default_device()
+    ):
         l, Lambda, u = self.get_constraints()
         Gamma_half, invGamma_half = self.cov(inverse=True)
+        invGamma_half = invGamma_half.to(device)
+
+        s = self.s * 0.5
 
         if self.dual == False:
+            p = self.phis.to(device) @ invGamma_half
             # using all points without anchor points
             if self.observations is not None:
+                o = self.observations.to(device) @ invGamma_half
 
                 def objective(theta):
                     return (
-                        -torch.sum(torch.log(self.observations @ invGamma_half @ theta))
-                        + torch.sum(self.phis @ invGamma_half @ theta)
-                        + self.s * 0.5 * torch.sum((invGamma_half @ theta) ** 2)
+                        -torch.sum(torch.log(o @ theta))
+                        + torch.sum(p @ theta)
+                        + s * torch.sum((invGamma_half @ theta) ** 2)
                     )
 
             else:
 
                 def objective(theta):
-                    return torch.sum(
-                        self.phis @ invGamma_half @ theta
-                    ) + self.s * 0.5 * torch.sum((invGamma_half @ theta) ** 2)
+                    return torch.sum(p @ theta) + s * torch.sum(
+                        (invGamma_half @ theta) ** 2
+                    )
 
         else:
             # using anchor points
             mask = self.bucketized_counts > 0
             phis = self.varphis[mask, :]
-            tau = self.total_bucketized_time[mask]
+            tau = self.total_bucketized_time[mask].to(device)
+            p = phis @ invGamma_half
 
             if self.observations is not None:
-                observations = self.anchor_points_emb
-                weights = self.anchor_weights
+                observations = self.anchor_points_emb.to(device)
+                weights = self.anchor_weights.to(device)
                 mask = weights > 0.0
+
+                o = observations[mask, :] @ invGamma_half
 
                 def objective(theta):
                     return (
                         -torch.einsum(
                             "i,i",
                             weights[mask],
-                            torch.log(observations[mask, :] @ invGamma_half @ theta),
+                            torch.log(o @ theta),
                         )
-                        + torch.einsum("i,i", tau, phis @ invGamma_half @ theta)
-                        + self.s * 0.5 * torch.sum((invGamma_half @ theta) ** 2)
+                        + torch.einsum("i,i", tau, p @ theta)
+                        + s * torch.sum((invGamma_half @ theta) ** 2)
                     )
 
             else:
 
                 def objective(theta):
-                    return torch.einsum(
-                        "i,i", tau, phis @ invGamma_half @ theta
-                    ) + self.s * 0.5 * torch.sum((invGamma_half @ theta) ** 2)
+                    return torch.einsum("i,i", tau, p @ theta) + s * torch.sum(
+                        (invGamma_half @ theta) ** 2
+                    )
 
-        if self.rate is not None:
+        if isinstance(self.rate, torch.Tensor):
             theta0 = torch.zeros(size=(self.get_m(), 1)).view(-1).double()
             theta0.data = self.rate.data
         else:
@@ -1340,6 +1355,7 @@ class PoissonRateEstimator(RateEstimator):
             bounds=(l[0] + eps, u[0]),
             precision="float64",
             tol=1e-8,
+            torch_device=str(device),
             options={
                 "ftol": 1e-08,
                 "gtol": 1e-08,
@@ -1350,7 +1366,7 @@ class PoissonRateEstimator(RateEstimator):
             },
         )
 
-        self.rate = invGamma_half @ torch.from_numpy(res.x)
+        self.rate = invGamma_half.cpu() @ torch.from_numpy(res.x)
         print(res.message)
         return self.rate
 

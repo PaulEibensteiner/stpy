@@ -69,8 +69,8 @@ class PositiveEmbedding(Embedding):
     def get_size(self):
         return self.m**self.d
 
-    def integral(self, S):
-        pass
+    def integral(self, S) -> torch.Tensor:
+        raise NotImplementedError("Subclasses should implement this method.")
 
     def basis_fun(self, x, j):
         """

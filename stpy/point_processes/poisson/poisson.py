@@ -11,7 +11,7 @@ class PoissonPointProcess:
 
     """
 
-    def __init__(self, d=1, B=1, b=0.2, rate=None, rate_volume=None):
+    def __init__(self, d=1.0, B=1.0, b=0.2, rate=None, rate_volume=None):
         self.B = B
         self.d = d
         self.b = b

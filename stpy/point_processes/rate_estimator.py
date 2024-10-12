@@ -54,11 +54,6 @@ class RateEstimator:
                     x.append(obs)
 
                 if obs is not None:
-                    obs, _, duplicates = torch.unique(
-                        obs, dim=0, return_inverse=True, return_counts=True
-                    )
-                    obs = torch.einsum("ij,i->ij", obs, duplicates)
-
                     if times == True:
                         emb = self.packing.embed(obs) * dt
                     else:

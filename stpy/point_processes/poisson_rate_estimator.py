@@ -284,15 +284,16 @@ class PoissonRateEstimator(RateEstimator):
     def cov(self, inverse=False):
         return self.packing.cov(inverse=inverse)
 
-    def fit_gp(self, threads=4):
+    def fit_gp(self, threads=4, optimization_library=None):
+        optimization_library = optimization_library if optimization_library is not None else self.optimization_library
 
         if self.data is not None:
             if self.feedback == "count-record":
 
                 if self.estimator == "likelihood":
-                    if self.optimization_library == "cvxpy":
+                    if optimization_library == "cvxpy":
                         self.penalized_likelihood(threads=threads)
-                    elif self.optimization_library == "torch":
+                    elif optimization_library == "torch":
                         self.penalized_likelihood_fast(threads=threads)
                     else:
                         raise NotImplementedError(

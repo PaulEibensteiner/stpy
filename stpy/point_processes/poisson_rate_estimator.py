@@ -1,3 +1,4 @@
+import os
 from typing import Optional
 import cvxpy as cp
 import mosek
@@ -285,7 +286,11 @@ class PoissonRateEstimator(RateEstimator):
         return self.packing.cov(inverse=inverse)
 
     def fit_gp(self, threads=4, optimization_library=None):
-        optimization_library = optimization_library if optimization_library is not None else self.optimization_library
+        optimization_library = (
+            optimization_library
+            if optimization_library is not None
+            else self.optimization_library
+        )
 
         if self.data is not None:
             if self.feedback == "count-record":
@@ -1349,7 +1354,10 @@ class PoissonRateEstimator(RateEstimator):
         print(res.message)
         return self.rate
 
-    def penalized_likelihood(self, threads=4):
+    def penalized_likelihood(self, threads=None):
+        if threads is None:
+            cpu_count = os.cpu_count()
+            threads = max(cpu_count - 2, 1) if cpu_count is not None else 1
 
         theta = cp.Variable(self.get_m())
         l, Lambda, u = self.get_constraints()
@@ -1411,7 +1419,18 @@ class PoissonRateEstimator(RateEstimator):
             theta.value = self.rate.numpy()
 
         try:
-            prob.solve(solver=cp.CLARABEL, warm_start=False, verbose=True)
+            prob.solve(
+                solver=cp.MOSEK,
+                warm_start=False,
+                verbose=False,
+                mosek_params={
+                    mosek.iparam.num_threads: threads,
+                    mosek.iparam.intpnt_solve_form: mosek.solveform.dual,
+                    mosek.dparam.intpnt_co_tol_pfeas: 1e-4,
+                    mosek.dparam.intpnt_co_tol_dfeas: 1e-4,
+                    mosek.dparam.intpnt_co_tol_rel_gap: 1e-4,
+                },
+            )
 
             self.rate = torch.from_numpy(theta.value)
             return self.rate
@@ -1443,7 +1462,18 @@ class PoissonRateEstimator(RateEstimator):
         # 	theta.value = self.rate.numpy()
         try:
             prob = cp.Problem(objective, constraints)
-            prob.solve(solver=cp.CLARABEL, warm_start=False, verbose=True)
+            prob.solve(
+                solver=cp.MOSEK,
+                warm_start=False,
+                verbose=False,
+                mosek_params={
+                    mosek.iparam.num_threads: threads,
+                    mosek.iparam.intpnt_solve_form: mosek.solveform.dual,
+                    mosek.dparam.intpnt_co_tol_pfeas: 1e-4,
+                    mosek.dparam.intpnt_co_tol_dfeas: 1e-4,
+                    mosek.dparam.intpnt_co_tol_rel_gap: 1e-4,
+                },
+            )
             self.rate = torch.from_numpy(theta.value)
         except:
             print("Optimization failed. Using the old value.")

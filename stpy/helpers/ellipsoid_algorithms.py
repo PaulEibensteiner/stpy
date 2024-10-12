@@ -228,7 +228,11 @@ def maximize_on_elliptical_slice(x, Sigma, mu, c, l, Lambda, u):
     constraints.append(Lambda @ theta >= l)
     constraints.append(Lambda @ theta <= u)
     prob = cp.Problem(obj_max, constraints)
-    prob.solve(solver=cp.SCS, verbose=True)
+    prob.solve(
+        solver=cp.MOSEK,
+        verbose=False,
+        mosek_params={mosek.iparam.intpnt_solve_form: mosek.solveform.dual},
+    )
     val = prob.value
     theta = theta.value
     return val, theta

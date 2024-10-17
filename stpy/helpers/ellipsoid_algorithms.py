@@ -7,7 +7,7 @@ from stpy.optim.custom_optimizers import QCQP_problem
 
 
 def maximum_volume_ellipsoid_l1_polytope_ellipse(ellipse, l1_polytope, verbose=False):
-    """
+    r"""
     ellipse is
     xA_ix + 2b_i x + c_i \leq 0
 
@@ -129,7 +129,7 @@ def maximum_volume_ellipsoid_relu_polytope_ellipse(
 def maximum_volume_ellipsoid_intersection_ellipsoids(
     ellipses, planes=None, verbose=False
 ):
-    """
+    r"""
     Each ellipse is
     xA_ix + 2b_i x + c_i \leq 0
 
@@ -185,7 +185,7 @@ def maximum_volume_ellipsoid_intersection_ellipsoids(
 
 
 def ellipsoid_cut(c, B, a, beta):
-    """
+    r"""
     :param c: elipsoid center
     :param B: elipsoid covariance
     :param a: a
@@ -212,7 +212,7 @@ def ellipsoid_cut(c, B, a, beta):
 
 
 def maximize_on_elliptical_slice(x, Sigma, mu, c, l, Lambda, u):
-    """
+    r"""
     solves the problem
             min x^\top \theta
             s.t. (\theta - \mu)Sigma(\theta - \mu) \leq c
@@ -239,7 +239,7 @@ def maximize_on_elliptical_slice(x, Sigma, mu, c, l, Lambda, u):
 
 
 def maximize_matrix_quadratic_on_ellipse(X, Sigma, mu, c, threads=4):
-    """
+    r"""
     solves the problem
             max \theta ^top Z \theta
             s.t. (\theta - \mu)Sigma(\theta - \mu) \leq c
@@ -251,7 +251,7 @@ def maximize_matrix_quadratic_on_ellipse(X, Sigma, mu, c, threads=4):
 
 
 def minimize_matrix_quadratic_on_ellipse(Z, Sigma, mu, c, threads=4):
-    """
+    r"""
     solves the problem
             min \theta ^top Z \theta
             s.t. (\theta - \mu)Sigma(\theta - \mu) \leq c
@@ -278,7 +278,7 @@ def minimize_matrix_quadratic_on_ellipse(Z, Sigma, mu, c, threads=4):
 
 
 def maximize_quadratic_on_ellipse(x, Sigma, mu, c, threads=4):
-    """
+    r"""
     solves the problem
             max (x^\top \theta)^2
             s.t. (\theta - \mu)Sigma(\theta - \mu) \leq c
@@ -291,7 +291,7 @@ def maximize_quadratic_on_ellipse(x, Sigma, mu, c, threads=4):
 
 
 def minimize_quadratic_on_ellipse(x, Sigma, mu, c, threads=4):
-    """
+    r"""
     solves the problem
             min (x^\top \theta)^2
             s.t. (\theta - \mu)Sigma(\theta - \mu) \leq c

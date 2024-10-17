@@ -11,7 +11,7 @@ class BernsteinEmbedding(PositiveEmbedding):
         super().__init__(*args, **kwargs)
 
     def basis_fun(self, x, j):  # 1d
-        """
+        r"""
         Return the value of basis function \phi_j(x)
         :param x: double, need to be in the interval
         :param j: integer, index of hat functions, 0 <= j <= m-1
@@ -136,7 +136,7 @@ class BernsteinSplinesOverlapping(PositiveEmbedding):
         self.degree = degree
 
     def basis_fun(self, x, q, derivative=0, extrapolate=False):  # 1d
-        """
+        r"""
         Return the value of basis function \phi_j(x)
 
         :param x: double, need to be in the interval
@@ -228,7 +228,7 @@ class BernsteinSplinesEmbedding(PositiveEmbedding):
 
     # def basis_fun(self, x, j, k, derivative = 0, extrapolate = False): #1d
     def basis_fun(self, x, q, derivative=0, extrapolate=False):  # 1d
-        """
+        r"""
         Return the value of basis function \phi_j(x)
 
         :param x: double, need to be in the interval

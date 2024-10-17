@@ -55,7 +55,7 @@ class EfficientTriangleEmbedding(PositiveEmbedding):
         return i
 
     def integral(self, S):
-        """
+        r"""
         Integrate the Phi(x) over S
         :param S: borel set
         :return: $\int_S \Phi(x) dx$

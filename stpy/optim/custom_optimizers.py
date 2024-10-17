@@ -130,7 +130,7 @@ def QPQC_problem(A, a, s, Sigma=None):
 
 
 def convex_QCQP(A, a, s, Sigma=None, threads=4, verbose=False):
-    """
+    r"""
     Solving
 
     min xAx - 2ax

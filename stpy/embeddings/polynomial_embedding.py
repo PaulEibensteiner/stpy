@@ -6,7 +6,7 @@ __version__ = "0.2"
 __email__ = "mojmir.mutny@inf.ethz.ch"
 __status__ = "DEV"
 
-"""
+r"""
 This file implements a polynomial embedding 
 	k(x,y) = \Phi(x)^\top \Phi(y)
 	for kernels of the form (x^\top y + 1)^p

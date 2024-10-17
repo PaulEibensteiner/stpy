@@ -16,7 +16,7 @@ class TriangleEmbedding(PositiveEmbedding):
         super().__init__(*args, **kwargs)
 
     def basis_fun(self, x, j):
-        """
+        r"""
         Return the value of basis function \phi_j(x)
 
         :param x: double, need to be in the interval
@@ -74,10 +74,10 @@ class TriangleEmbedding(PositiveEmbedding):
         return vol
 
     def integral(self, S):
-        """
+        r"""
         Integrate the Phi(x) over S
         :param S: borel set
-        :return:
+        :return: $\int_S \Phi(x) dx$
         """
         if S in self.procomp_integrals.keys():
             return self.procomp_integrals[S]
@@ -150,7 +150,7 @@ class FaberSchauderEmbedding(TriangleEmbedding):
             raise AssertionError("This basis works only with log_2(n) is integer.")
 
     def basis_fun(self, x, j):
-        """
+        r"""
         Return the value of basis function \phi_j(x)
 
         :param x: double, need to be in the interval
@@ -283,7 +283,7 @@ class BumpsEmbedding(PositiveEmbedding):
             psi[j] = vol
 
     def basis_fun(self, x, j):  # 1d
-        """
+        r"""
         Return the value of basis function \phi_j(x)
 
         :param x: double, need to be in the interval

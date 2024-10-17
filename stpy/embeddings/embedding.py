@@ -6,7 +6,7 @@ __version__ = "0.3"
 __email__ = "mojmir.mutny@inf.ethz.ch"
 __status__ = "DEV"
 
-"""
+r"""
 This file implements code used in paper:
 
 	Mojmir Mutny & Andreas Krause, "Efficient High Dimensional Bayesian Optimization 

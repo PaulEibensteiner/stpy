@@ -73,7 +73,7 @@ class PositiveEmbedding(Embedding):
         raise NotImplementedError("Subclasses should implement this method.")
 
     def basis_fun(self, x, j):
-        """
+        r"""
         Return the value of basis function \phi_j(x)
 
         :param x: double, need to be in the interval

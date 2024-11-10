@@ -192,11 +192,11 @@ class PoissonRateEstimator(RateEstimator):
         self.variances_histogram = []
         self.observations = None
         self.rate = None
+        r""" $\hat \theta$ in the paper"""
         self.W = (s) * torch.eye(self.get_m()).double()
         self.W_inv_approx = (1.0 / s) * torch.eye(self.get_m()).double()
         self.beta_value = 2.0
         self.sampled_theta = None
-
         if self.dual == True:
             if self.d == 1:
                 anchor = no_anchor_points
@@ -213,7 +213,7 @@ class PoissonRateEstimator(RateEstimator):
             self.global_dt = 0.0
             self.anchor_points_emb = self.packing.embed(self.anchor_points)
 
-        if feedback_type == "count-record" and basis != "custom":
+        if feedback_type == "count-record":
             print("Precomputing phis.")
             for index_set, set in enumerate(self.basic_sets):
                 self.varphis[index_set, :] = self.packing.integral(set)
@@ -224,6 +224,19 @@ class PoissonRateEstimator(RateEstimator):
         print("Precomputation finished.")
 
     def add_data_point(self, new_data, times=True):
+        r"""
+        Takes data in the format (area: BorelSet, data_points: Tensor, time_delta: float)
+        where data_points is a 2d tensor, with number of columns equal to d
+        and number of rows equal to the number of point observations
+
+        It triggers a re-fitting of the approximation parameters $\hat \theta$
+        and adds
+
+        - the integral over the sensing area plus the log of the integral over the sensing area if the data is of type histogram
+        - the integral over the sensing are plus the sum of the rate function at the datapoints if the data is of type count-record
+
+        to `self.loglikelihood`
+        """
 
         super().add_data_point(new_data, times=times)
 
@@ -588,6 +601,8 @@ class PoissonRateEstimator(RateEstimator):
         # def prox(x):
         # 	return Gamma_half @ torch.from_numpy(scipy.optimize.nnls(invGamma.numpy(), (invGamma_half@x).numpy().reshape(-1), maxiter = 1000)[0]).view(-1,1)
 
+        samples = []
+
         if self.data is not None:
             if self.feedback == "count-record" and self.dual == False:
                 if self.observations is not None:
@@ -686,7 +701,11 @@ class PoissonRateEstimator(RateEstimator):
             if verbose == True:
                 print("Iter:", k, theta.T)
 
+            samples.append(prox(theta))
+
         self.sampled_theta = prox(theta)
+
+        return samples
 
     def sample_proximal_langevin_simple_prox(self, steps=300, verbose=False):
 
@@ -1225,11 +1244,11 @@ class PoissonRateEstimator(RateEstimator):
         sample_paths = var_mf_sgcp.sample_posterior(xtest, num_samples=1.0)
         return sample_paths
 
-    def sample(self, verbose=False, steps=1000, domain=None):
+    def sample(self, verbose=False, steps=None, domain=None):
         """
         :return:
         """
-        if self.steps is not None:
+        if steps is None:
             steps = self.steps
 
         if self.stepsize is not None:
@@ -1238,34 +1257,33 @@ class PoissonRateEstimator(RateEstimator):
             stepsize = None
 
         l, Lambda, u = self.get_constraints()
-        print("Sampling started.")
         if self.rate is None:
             self.fit_gp()
 
         if self.sampling == "mirror":
-            self.sample_mirror_langevin(steps=steps, verbose=verbose)
+            r = self.sample_mirror_langevin(steps=steps, verbose=verbose)
         elif self.sampling == "proximal+prox":
-            self.sample_proximal_langevin_prox(steps=steps, verbose=verbose)
+            r = self.sample_proximal_langevin_prox(steps=steps, verbose=verbose)
         elif self.sampling == "proximal+simple_prox":
-            self.sample_proximal_langevin_simple_prox(steps=steps, verbose=verbose)
+            r = self.sample_proximal_langevin_simple_prox(steps=steps, verbose=verbose)
         elif self.sampling == "hessian":
-            self.sample_hessian_positive_langevin(
+            r = self.sample_hessian_positive_langevin(
                 steps=steps, verbose=verbose, stepsize=stepsize
             )
         elif self.sampling == "hessian2":
-            self.sample_hessian_positive_langevin_2(
+            r = self.sample_hessian_positive_langevin_2(
                 steps=steps, verbose=verbose, stepsize=stepsize
             )
         elif self.sampling == "mla_prime":
-            self.sample_mla_prime(steps=steps, verbose=verbose, stepsize=stepsize)
+            r = self.sample_mla_prime(steps=steps, verbose=verbose, stepsize=stepsize)
         elif self.sampling == "hmc":
-            self.sample_hmc(steps=steps, verbose=verbose, stepsize=stepsize)
+            r = self.sample_hmc(steps=steps, verbose=verbose, stepsize=stepsize)
         elif self.sampling == "polyia_variational":
-            self.sample_variational(accuracy=1.0 / steps, verbose=verbose)
+            r = self.sample_variational(accuracy=1.0 / steps, verbose=verbose)
         else:
             raise NotImplementedError("Sampling of such is not supported.")
 
-        print("Sampling finished.")
+        return r
 
     def sampled_lcb_ucb(self, xtest, samples=100, delta=0.1):
         paths = []
@@ -1349,7 +1367,7 @@ class PoissonRateEstimator(RateEstimator):
         eps = 1e-4
         res = minimize(
             objective,
-            theta0.numpy(),
+            theta0.cpu().numpy(),
             backend="torch",
             method="L-BFGS-B",
             bounds=(l[0] + eps, u[0]),

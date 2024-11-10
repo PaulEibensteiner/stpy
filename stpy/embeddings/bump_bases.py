@@ -92,7 +92,7 @@ class TriangleEmbedding(PositiveEmbedding):
                     for j in range(self.get_m()):
                         tj = self.interval[0] + j * dm
                         vol = self.integrate_1d(a.numpy(), b.numpy(), tj, dm)
-                        psi[j] = vol
+                        psi[j] = float(vol)
 
                 elif self.d == 2:
                     dm = (self.interval[1] - self.interval[0]) / (self.m - 1)  # delta m
@@ -108,7 +108,7 @@ class TriangleEmbedding(PositiveEmbedding):
                         # center_point = torch.Tensor( [tj,tk]).view(-1,1)
                         vol = self.integrate_1d(xa.numpy(), xb.numpy(), tk, dm)
                         vol2 = self.integrate_1d(ya.numpy(), yb.numpy(), tj, dm)
-                        psi[j] = vol * vol2
+                        psi[j] = float(vol * vol2)
                 # if torch.sum(S.is_inside(center_point)):
                 # psi[j] = (dm**2)/3.
                 else:

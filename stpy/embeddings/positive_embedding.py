@@ -19,8 +19,8 @@ class PositiveEmbedding(Embedding):
         m,
         kernel_object: Optional[KernelFunction] = None,
         interval=(-1, 1),
-        B=1,
-        b=0,
+        B=1.0,
+        b=0.0,
         s=0.001,
         offset=0.0,
     ):

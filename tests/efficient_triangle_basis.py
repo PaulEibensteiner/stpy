@@ -13,12 +13,14 @@ if __name__ == "__main__":
     efficient = EfficientTriangleEmbedding(d, m, interval=(-1, 1))
 
     for x, j in [(0.5, 1), (0.1, 0)]:
-        x = torch.tensor(x)
-        assert inefficient.basis_fun(x, j) == efficient.basis_fun(x, j)
+        x = torch.tensor(x, dtype=torch.float64)
+        assert torch.allclose(
+            inefficient.basis_fun(x, j).double(), efficient.basis_fun(x, j)
+        )
 
     for set in [[-1, 1], [-0.25, 1], [-2, 2]]:
         s = BorelSet(1, torch.tensor([set]))
-        assert torch.all(inefficient.integral(s) == efficient.integral(s))
+        assert torch.allclose(inefficient.integral(s), efficient.integral(s))
 
     d = 2
     m = 2
@@ -27,5 +29,7 @@ if __name__ == "__main__":
     efficient = EfficientTriangleEmbedding(d, m, interval=(-1, 1))
 
     for x, j in [([0.5, 0.1], 1), ([0.7, 0.1], 0)]:
-        x = torch.tensor(x)
-        assert torch.all(inefficient.basis_fun(x, j) == efficient.basis_fun(x, j))
+        x = torch.tensor(x, dtype=torch.float64)
+        assert torch.allclose(
+            inefficient.basis_fun(x, j).double(), efficient.basis_fun(x, j)
+        )

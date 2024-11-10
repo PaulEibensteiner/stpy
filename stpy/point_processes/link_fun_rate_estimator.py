@@ -17,14 +17,14 @@ from stpy.helpers.ellipsoid_algorithms import (
     minimize_matrix_quadratic_on_ellipse,
 )
 from stpy.point_processes.poisson import PoissonPointProcess
-from stpy.point_processes.poisson_rate_estimator import PositiveRateEstimator
+from stpy.point_processes.poisson_rate_estimator import PoissonRateEstimator
 from stpy.borel_set import BorelSet, HierarchicalBorelSets
 from stpy.kernels import KernelFunction
 
 ## implement loading data
 
 
-class PermanentalProcessRateEstimator(PositiveRateEstimator):
+class PermanentalProcessRateEstimator(PoissonRateEstimator):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

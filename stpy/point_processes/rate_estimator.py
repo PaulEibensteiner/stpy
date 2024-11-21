@@ -17,7 +17,7 @@ class RateEstimator:
         return (np.min(volumes), np.max(volumes))
 
     def load_data(self, data: List, times=True):
-        r"""Load the data and save $\Phi(x)$ into `self.observations`, $n(A_i)$ in
+        r"""Load the data and save $\phi(x)$ into `self.observations`, $n(A_i)$ in
         `self.counts` and $\int_{A_i} \phi_j(x) dx$ into `self.phis`
 
 

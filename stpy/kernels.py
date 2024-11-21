@@ -6,6 +6,7 @@ from scipy.spatial.distance import cdist
 from scipy.special import kv
 from sklearn.metrics.pairwise import check_pairwise_arrays, manhattan_distances
 from stpy.kernel_functions.squared_exponential_kernel import (
+    squared_exponential_integral,
     squared_exponential_kernel_diag,
 )
 
@@ -191,6 +192,12 @@ class KernelFunction:
 
     def get_kernel(self):
         return self.kernel
+
+    def integral(self, a_x, a_y, b_x, b_y):
+        if self.optkernel == "squared_exponential":
+            return squared_exponential_integral(a_x, a_y, b_x, b_y, **self.params)
+        else:
+            raise NotImplementedError()
 
     def get_kernel_internal(self, diag=False):
 

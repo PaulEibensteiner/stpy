@@ -213,13 +213,11 @@ class PoissonRateEstimator(RateEstimator):
             self.global_dt = 0.0
             self.anchor_points_emb = self.packing.embed(self.anchor_points)
 
-        if feedback_type == "count-record":
+        if feedback_type == "count-record" and self.dual:
             print("Precomputing phis.")
             for index_set, set in enumerate(self.basic_sets):
                 self.varphis[index_set, :] = self.packing.integral(set)
                 self.variances[index_set] = set.volume() * self.B
-        else:
-            pass
 
         print("Precomputation finished.")
 
@@ -581,7 +579,7 @@ class PoissonRateEstimator(RateEstimator):
                 np.eye(self.get_m()),
                 x.numpy().reshape(-1),
                 C=Gamma_half.numpy(),
-                b=l.numpy(),
+                b=np.array(l),
                 factorized=True,
             )
             return torch.from_numpy(res[0]).view(-1, 1)

@@ -1,3 +1,4 @@
+from typing import List
 import numpy as np
 import torch
 import scipy
@@ -215,6 +216,9 @@ class PermanentalProcessRateEstimator(PoissonRateEstimator):
             for sample in data:
                 (S, obs, dt) = sample
                 self.sumLambda += self.product_integral(S) * dt
+        else:
+            self.S = data[0][0]
+            assert isinstance(self.S, BorelSet)
 
     def add_data_point(self, new_data):
         super().add_data_point(new_data, times=False)
@@ -405,14 +409,16 @@ class LogisticGaussProcessRateEstimator(PermanentalProcessRateEstimator):
 class ExpGaussProcessRateEstimator(PermanentalProcessRateEstimator):
 
     def penalized_likelihood(self, threads=4):
-        weights = self.weights.numpy()
-        nodes = self.nodes.numpy()
+        # Get node function values and weights for Gauss-Legendre quadrature
+        weights, nodes = self.S.return_legendre_discretization(n=50)
+        weights = np.array(weights)
+        vals = np.array(self.packing.embed_internal(nodes))
 
         if self.observations is not None:
             observations = self.observations.numpy()
             loss = lambda theta: float(
                 np.sum(observations @ theta)
-                + np.sum(weights * np.exp(-theta @ nodes.T))
+                + np.sum(weights * np.exp(-theta @ vals))
                 + self.s * np.sum(theta**2)
             )
         else:

@@ -11,7 +11,9 @@ class PoissonPointProcess:
 
     """
 
-    def __init__(self, d=1.0, B=1.0, b=0.2, rate=None, rate_volume=None):
+    def __init__(
+        self, d=1.0, B=1.0, b=0.2, rate=None, rate_volume=None, naive_integral=False
+    ):
         self.B = B
         self.d = d
         self.b = b
@@ -22,6 +24,7 @@ class PoissonPointProcess:
 
         self.rate_volume_f = rate_volume
         self.exact = True
+        self.naive_integral = naive_integral
 
     def rate_default(self, x, dt=1.0):
         return (
@@ -65,18 +68,24 @@ class PoissonPointProcess:
         else:
             return self.rate_volume_f(S) * dt
 
-    def sample_discretized(self, S, dt, n=100):
-        lam = np.maximum(float(self.rate_volume(S, dt)), 0)
-        count = np.random.poisson(lam=lam)
+    def sample_discretized(self, S: BorelSet, dt, n=100):
+        x = S.return_discretization(n).to(device=torch.get_default_device())
+        r = self.rate(x) * dt
+        if self.naive_integral:
+            total_area = 1.0
+            for bound in S.bounds:
+                total_area *= bound[1] - bound[0]
+            lam = r.sum() * (total_area / len(x))
+        else:
+            lam = np.maximum(float(self.rate_volume(S, dt)), 0)
+        count = np.random.poisson(lam=lam.cpu().numpy())
         if count > 0:
-            x = S.return_discretization(n)
-            r = self.rate(x) * dt
             r = torch.maximum(r, r * 0)
             sample = torch.from_numpy(
                 np.random.choice(
                     np.arange(0, x.size()[0], 1),
                     size=count,
-                    p=(r / torch.sum(r)).numpy().reshape(-1),
+                    p=(r / torch.sum(r)).cpu().numpy().reshape(-1),
                 )
             )
             return x[sample, :]
@@ -187,7 +196,7 @@ class PoissonPointProcess:
 if __name__ == "__main__":
     d = 2
     n = 100
-    bounds = torch.Tensor([[-1, 1], [-1, 1]]).double()
+    bounds = torch.tensor([[-1, 1], [-1, 1]]).double()
     D = BorelSet(d, bounds)
 
     process = PoissonPointProcess(d=d, B=2)

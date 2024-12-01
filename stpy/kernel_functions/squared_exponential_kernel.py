@@ -41,7 +41,7 @@ def squared_exponential_kernel_diag(a, b, **kwargs):
 
 def squared_exponential_integral(a_x, a_y, b_x, b_y, **kwargs):
     """
-    Returns a function that computes g(x) for multiple 2D points x given lower and upper bounds.
+    Returns $g(x) = \int_{a_1, b_1}^{a_2, b_2} \kappa \cdot \exp(-\gamma \| x - s \|^2 ds$
 
     Parameters:
     - a_x: torch.Tensor, lower bounds in x-dimension (shape: [N])
@@ -51,12 +51,14 @@ def squared_exponential_integral(a_x, a_y, b_x, b_y, **kwargs):
     - kwargs: should give attributes gamma (float) and kappa (float)
 
     Returns:
-    - A function `g(x)` that computes g(x) for input x (torch.Tensor of shape [M, 2]).
+    - A function such that squared_exponetial_integral(a_x, a_y, b_x, b_y)(x)[i][j]
+        is equal to $g(x_j)$ where $g$ is created from a_x[i], a_y[i], b_x[i], b_y[i]
     """
     p = KernelParams(kwargs)
     p.assert_existence(["gamma", "kappa"])
     gamma = p.gamma
     kappa = p.kappa
+    sqrt_2 = torch.sqrt(torch.tensor(2.0))
 
     def g(x):
         """
@@ -75,16 +77,16 @@ def squared_exponential_integral(a_x, a_y, b_x, b_y, **kwargs):
         b_y_broadcast = b_y.unsqueeze(1)  # Shape [N, 1]
 
         # Compute the error function terms
-        erf_x1_a = torch.erf((a_x_broadcast - x1) * torch.sqrt(torch.tensor(gamma)))
-        erf_x1_b = torch.erf((b_x_broadcast - x1) * torch.sqrt(torch.tensor(gamma)))
-        erf_x2_a = torch.erf((a_y_broadcast - x2) * torch.sqrt(torch.tensor(gamma)))
-        erf_x2_b = torch.erf((b_y_broadcast - x2) * torch.sqrt(torch.tensor(gamma)))
+        erf_x1_a = torch.erf((a_x_broadcast - x1) / (gamma * sqrt_2))
+        erf_x1_b = torch.erf((b_x_broadcast - x1) / (gamma * sqrt_2))
+        erf_x2_a = torch.erf((a_y_broadcast - x2) / (gamma * sqrt_2))
+        erf_x2_b = torch.erf((b_y_broadcast - x2) / (gamma * sqrt_2))
 
         # Compute the product of error function differences
         integral_values = (erf_x1_a - erf_x1_b) * (erf_x2_a - erf_x2_b)
 
         # Scale by constants
-        result = (torch.pi * kappa / (4 * gamma)) * integral_values
+        result = (torch.pi * kappa * (gamma**2) / 2.0) * integral_values
 
         return result
 

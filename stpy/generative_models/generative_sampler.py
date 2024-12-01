@@ -1,6 +1,7 @@
 import torch
 
-class GenerativeSampler():
+
+class GenerativeSampler:
 
     def __init__(self):
         pass

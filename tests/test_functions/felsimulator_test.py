@@ -7,8 +7,6 @@ from stpy.helpers.helper import interval_torch
 
 if __name__ == "__main__":
     sigma = 0.1
-    xtest = interval_torch(30, d= 2, L_infinity_ball=0.5)
-    F = SwissFEL(d =2, dts = 'evaluations_bpm.hdf5')
+    xtest = interval_torch(30, d=2, L_infinity_ball=0.5)
+    F = SwissFEL(d=2, dts="evaluations_bpm.hdf5")
     F.Simulator.GP.visualize_contour(xtest)
-
-

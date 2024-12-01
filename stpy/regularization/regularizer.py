@@ -8,7 +8,7 @@ from stpy.regularization.constraints import CustomConstraint
 
 class Regularizer(ABC):
 
-    def __init__(self, lam=1.):
+    def __init__(self, lam=1.0):
         self.lam = lam
         self.groups = None
         self.convex = True
@@ -19,7 +19,9 @@ class Regularizer(ABC):
 
     @abstractmethod
     def get_regularizer_cvxpy(self):
-        def reg(theta): return 0
+        def reg(theta):
+            return 0
+
         return reg
 
     def is_convex(self):
@@ -28,8 +30,10 @@ class Regularizer(ABC):
     def get_constraint_set_cvxpy(self, theta, c):
         return [self.get_regularizer_cvxpy()(theta) <= c]
 
-    def get_constraint_object(self,c):
-        return CustomConstraint(None, lambda theta: self.get_constraint_set_cvxpy(theta, c))
+    def get_constraint_object(self, c):
+        return CustomConstraint(
+            None, lambda theta: self.get_constraint_set_cvxpy(theta, c)
+        )
 
     def hessian(self, theta_fit):
         pass
@@ -37,27 +41,30 @@ class Regularizer(ABC):
 
 class L2Regularizer(Regularizer):
 
-    def __init__(self, lam=1.):
-        super().__init__(lam = lam)
+    def __init__(self, lam=1.0):
+        super().__init__(lam=lam)
 
     def get_regularizer_cvxpy(self):
-        def reg(theta): return self.lam*cp.sum_squares(theta)/2.
+        def reg(theta):
+            return self.lam * cp.sum_squares(theta) / 2.0
+
         return reg
 
     def eval(self, theta):
-        return self.lam*torch.sum(theta**2)/2.
+        return self.lam * torch.sum(theta**2) / 2.0
 
     def hessian(self, theta):
-        return self.lam * torch.eye(n = theta.size()[0]).double()/2.
+        return self.lam * torch.eye(n=theta.size()[0]).double() / 2.0
+
 
 class NonConvexLqRegularizer(Regularizer):
 
-    def __init__(self, lam=1., q = 0.5):
-        super().__init__(lam = lam)
+    def __init__(self, lam=1.0, q=0.5):
+        super().__init__(lam=lam)
         self.q = q
 
     def eval(self, theta):
-        return self.lam*torch.sum(torch.abs(theta)**self.q)
+        return self.lam * torch.sum(torch.abs(theta) ** self.q)
 
     def hessian(self, theta):
         return None
@@ -67,14 +74,16 @@ class NonConvexLqRegularizer(Regularizer):
 
     def get_regularizer_cvxpy(self, eta):
         def reg(theta):
-            norm = cp.sum_squares(theta/eta.reshape(-1,1))
-            return self.q*0.5*norm*self.lam
+            norm = cp.sum_squares(theta / eta.reshape(-1, 1))
+            return self.q * 0.5 * norm * self.lam
+
         return reg
+
 
 class GroupNonCovexLqRegularizer(NonConvexLqRegularizer):
 
-    def __init__(self, lam=1., q = 0.5, groups = None):
-        super().__init__(lam = lam)
+    def __init__(self, lam=1.0, q=0.5, groups=None):
+        super().__init__(lam=lam)
         self.q = q
         self.groups = groups
 
@@ -82,43 +91,44 @@ class GroupNonCovexLqRegularizer(NonConvexLqRegularizer):
         val = None
         for group in self.groups:
             if val is None:
-                val = torch.norm(theta[group])**self.q
+                val = torch.norm(theta[group]) ** self.q
             else:
                 val += torch.norm(theta[group]) ** self.q
-        return self.lam*val
+        return self.lam * val
 
     def get_regularizer_cvxpy(self, eta):
         def reg(theta):
             val = None
-            for i,group in enumerate(self.groups):
+            for i, group in enumerate(self.groups):
                 if val is None:
-                    val = cp.sum_squares(theta[group])/eta[i].reshape(-1,1)
+                    val = cp.sum_squares(theta[group]) / eta[i].reshape(-1, 1)
                 else:
-                    val += cp.sum_squares(theta[group])/eta[i].reshape(-1,1)
-            return val*self.lam
+                    val += cp.sum_squares(theta[group]) / eta[i].reshape(-1, 1)
+            return val * self.lam
+
         return reg
 
 
 class L1Regularizer(Regularizer):
-    def __init__(self, lam=1.):
-        super().__init__(lam = lam)
+    def __init__(self, lam=1.0):
+        super().__init__(lam=lam)
 
     def get_regularizer_cvxpy(self):
         def reg(theta):
-            return self.lam*cp.norm1(theta)
+            return self.lam * cp.norm1(theta)
+
         return reg
 
     def eval(self, theta):
-        return self.lam*torch.sum(torch.abs(theta))
+        return self.lam * torch.sum(torch.abs(theta))
 
     def hessian(self, theta):
-        return self.lam * torch.eye(n = theta.size()[0]).double()
-
+        return self.lam * torch.eye(n=theta.size()[0]).double()
 
 
 class GroupL1L2Regularizer(Regularizer):
 
-    def __init__(self, lam = 1., groups = None):
+    def __init__(self, lam=1.0, groups=None):
         self.groups = groups
         self.lam = lam
         pass
@@ -137,14 +147,16 @@ class GroupL1L2Regularizer(Regularizer):
                     norm = cp.norm2(theta[group])
                 else:
                     norm += cp.norm2(theta[group])
-            return cp.square(norm)*self.lam
+            return cp.square(norm) * self.lam
+
         return reg
 
     def hessian(self, theta):
         return None
 
+
 class NestedGroupL1Regularizer(Regularizer):
-    def __init__(self, lam = 1., groups = None, weights = None):
+    def __init__(self, lam=1.0, groups=None, weights=None):
         self.groups = groups
         self.lam = lam
         self.weights = weights
@@ -153,7 +165,7 @@ class NestedGroupL1Regularizer(Regularizer):
     def eval(self, theta):
         norm = 0
         for i, group in enumerate(self.groups):
-            norm += self.weights[i]*torch.sum(torch.abs(theta[group]))
+            norm += self.weights[i] * torch.sum(torch.abs(theta[group]))
         return norm**2 * self.lam
 
     def get_regularizer_cvxpy(self):
@@ -167,16 +179,17 @@ class NestedGroupL1Regularizer(Regularizer):
                 else:
                     norm += self.weights[i] * cp.norm1(theta[group])
 
-            return norm*self.lam
+            return norm * self.lam
 
         return reg
 
     def hessian(self, theta):
         return None
 
+
 class NestedGroupL1L2Regularizer(Regularizer):
 
-    def __init__(self, lam = 1., groups = None, weights = None):
+    def __init__(self, lam=1.0, groups=None, weights=None):
         self.groups = groups
         self.lam = lam
         self.weights = weights
@@ -199,7 +212,7 @@ class NestedGroupL1L2Regularizer(Regularizer):
                 else:
                     norm += self.weights[i] * cp.norm2(theta[group])
 
-            return cp.square(norm)*self.lam
+            return cp.square(norm) * self.lam
 
         return reg
 
@@ -208,7 +221,7 @@ class NestedGroupL1L2Regularizer(Regularizer):
 
 
 class NonConvexNormRegularizer(Regularizer):
-    def __init__(self, lam = 1., q = 1. , groups = None):
+    def __init__(self, lam=1.0, q=1.0, groups=None):
         self.groups = groups
         self.lam = lam
         self.q = q
@@ -230,6 +243,6 @@ class NonConvexNormRegularizer(Regularizer):
                 else:
                     norm += self.weights[i] * cp.norm2(theta[group])
 
-            return cp.square(norm)*self.lam
+            return cp.square(norm) * self.lam
 
         return reg

@@ -218,6 +218,7 @@ class PermanentalProcessRateEstimator(PoissonRateEstimator):
                 self.sumLambda += self.product_integral(S) * dt
         else:
             self.S = data[0][0]
+            self.dt = data[0][2]
             assert isinstance(self.S, BorelSet)
 
     def add_data_point(self, new_data):
@@ -409,21 +410,23 @@ class LogisticGaussProcessRateEstimator(PermanentalProcessRateEstimator):
 class ExpGaussProcessRateEstimator(PermanentalProcessRateEstimator):
 
     def penalized_likelihood(self, threads=4):
+        # ONLY WORKS WITH ONE DATASET given by load_data!
         # Get node function values and weights for Gauss-Legendre quadrature
         weights, nodes = self.S.return_legendre_discretization(n=50)
-        weights = np.array(weights)
-        vals = np.array(self.packing.embed_internal(nodes))
+        nodes = nodes.to(torch.get_default_device())
+        weights = weights.cpu().numpy()
+        vals = self.packing.embed(nodes).cpu().numpy()
 
         if self.observations is not None:
-            observations = self.observations.numpy()
+            observations = self.observations.cpu().numpy()
             loss = lambda theta: float(
-                np.sum(observations @ theta)
-                + np.sum(weights * np.exp(-theta @ vals))
-                + self.s * np.sum(theta**2)
+                -np.sum(observations @ theta)
+                + self.dt * np.sum(weights * np.exp(theta @ vals.T))
+                + self.s * 0.5 * np.sum(theta**2)
             )
         else:
             loss = lambda theta: float(
-                np.sum(weights * np.exp(-theta @ nodes.T)) + self.s * np.sum(theta**2)
+                np.sum(weights * np.exp(theta @ nodes.T)) + self.s * np.sum(theta**2)
             )
 
         theta = np.zeros(self.get_m())
@@ -442,13 +445,24 @@ class ExpGaussProcessRateEstimator(PermanentalProcessRateEstimator):
                 "gtol": 1e-8,
             },
         )
-        self.rate = torch.from_numpy(res.x)
+        self.rate = torch.tensor(res.x)
 
         return self.rate
 
     def mean_rate(self, S, n=128):
         xtest = S.return_discretization(n)
-        return torch.exp(-self.packing.embed(xtest) @ self.rate)
+        return torch.exp(self.packing.embed(xtest) @ self.rate)
+
+    def rate_value(self, x, dt=1):
+        phi = self.packing.embed(x) * dt
+
+        if self.rate is not None:
+            map = torch.exp(phi @ self.rate.view(-1, 1))
+        else:
+            print("Rate function not fitted!")
+            map = 0 * phi[:, 0].view(-1, 1) + self.b
+
+        return map
 
 
 if __name__ == "__main__":

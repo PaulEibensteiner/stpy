@@ -1,4 +1,7 @@
+import sys
 import numpy as np
+import scipy
+from tqdm import tqdm
 
 
 # Python implementation of "Exact Hamiltonian Monte Carlo for Truncated Multivariate Gaussian"
@@ -140,11 +143,9 @@ class HmcSampler:
             if check >= 0:
                 # verify that we don't violate the constraints
                 # due to a numerical instability
-                if self.verbose:
-                    print("total number of velocity samples : %d" % count_sample_vel)
 
                 self.lastSample = bb
-                return bb
+                return bb, count_sample_vel
 
 
 def tmg(n, mu, M, initial, f=None, g=None, burn_in=30, verbose=False):
@@ -186,8 +187,8 @@ def tmg(n, mu, M, initial, f=None, g=None, burn_in=30, verbose=False):
     if f is not None:
         if f.shape[0] != len(g) or f.shape[1] != dim:
             raise ValueError(
-                "Inconsistent linear constraints. f must \
-                              be an d-by-m matrix and g an d-dimensional vector."
+                "Inconsistent linear constraints. f must                              "
+                " be an d-by-m matrix and g an d-dimensional vector."
             )
         # g may contains infinity, extract valid constraints
         valid = np.logical_and(g < np.inf, g > -np.inf)
@@ -207,14 +208,23 @@ def tmg(n, mu, M, initial, f=None, g=None, burn_in=30, verbose=False):
         hmc = HmcSampler(dim, init_trans, f, g, verbose=verbose)
 
     samples = np.zeros((n, dim))
-    for i in range(burn_in):
-        if verbose:
-            print("=" * 30 + " (burn in) sample {} ".format(i) + "=" * 30)
-        hmc.sampleNext()
-    for i in range(n):
-        if verbose:
-            print("=" * 30 + " sample {} ".format(i) + "=" * 30)
-        samples[i] = hmc.sampleNext()
+    for num_steps, desc in [(burn_in, "Burn-In"), (n, "sampling")]:
+        progress_bar = tqdm(range(num_steps), desc=desc, position=0)
+        numbers_bar = tqdm(total=1, bar_format="{desc}", position=1)
+        count_sample_vels = []
+
+        for i in progress_bar:
+            s, count_sample_vel = hmc.sampleNext()
+            if desc == "sampling":
+                samples[i] = s
+
+            if hmc.verbose:
+                count_sample_vels.append(count_sample_vel)
+                numbers_bar.set_description(
+                    "\rtotal number of velocity samples:"
+                    f" {', '.join(map(str, count_sample_vels))}"
+                )
+                numbers_bar.refresh()
 
     # transform back
     return samples @ R.T + mu

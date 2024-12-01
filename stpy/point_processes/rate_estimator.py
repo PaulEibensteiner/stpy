@@ -91,7 +91,7 @@ class RateEstimator:
             else:
                 self.observations = None
 
-            if self.feedback == "count-record":
+            if self.feedback == "count-record" and self.dual:
                 self.bucketization()
 
     def add_data_point(self, new_data, times=True):
@@ -209,3 +209,6 @@ class RateEstimator:
                 return None
         else:
             return None
+
+    def fit(self):
+        raise NotImplementedError()

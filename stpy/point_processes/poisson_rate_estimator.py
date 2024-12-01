@@ -302,6 +302,9 @@ class PoissonRateEstimator(RateEstimator):
     def cov(self, inverse=False):
         return self.packing.cov(inverse=inverse)
 
+    def fit(self):
+        self.fit_gp()
+
     def fit_gp(
         self,
         threads=4,
@@ -1309,6 +1312,8 @@ class PoissonRateEstimator(RateEstimator):
         self, device: torch.device = torch.get_default_device()
     ):
         l, Lambda, u = self.get_constraints()
+        # assert torch.allclose(Lambda, torch.eye(self.m**self.d))
+
         Gamma_half, invGamma_half = self.cov(inverse=True)
         invGamma_half = invGamma_half.to(device)
 

@@ -75,8 +75,8 @@ F = lambda X: embedding.embed(X) @ v * np.sqrt(budget)
 X = torch.rand(size=(10, d)).double() * 0.25 + 0.1
 y = F(X)
 
-# Xpoint = torch.Tensor([[0.],[0.5]]).double()
-# ypoint = torch.Tensor([[0.],[0.]]).double()
+# Xpoint = torch.tensor([[0.],[0.5]]).double()
+# ypoint = torch.tensor([[0.],[0.]]).double()
 
 # X = torch.vstack([X,Xpoint])
 # y = torch.vstack([y,ypoint])

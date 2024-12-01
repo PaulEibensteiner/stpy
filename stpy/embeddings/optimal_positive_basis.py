@@ -20,7 +20,7 @@ class OptimalPositiveBasis(PositiveEmbedding):
 
         B = BorelSet(
             self.d,
-            torch.Tensor(
+            torch.tensor(
                 [[self.interval[0], self.interval[1]] for _ in range(self.d)]
             ).double(),
         )
@@ -121,12 +121,13 @@ class OptimalPositiveBasis(PositiveEmbedding):
             Z = self.embed_internal(t)
 
             M = torch.pinverse(Z.T @ Z + (self.s) * torch.eye(self.Gamma.size()[0]))
-            self.M = torch.from_numpy(np.real(scipy.linalg.sqrtm(M.numpy())))
+            self.M = torch.tensor(np.real(scipy.linalg.sqrtm(M.cpu().numpy())))
 
-            self.Gamma_half = torch.from_numpy(
+            self.Gamma_half = torch.tensor(
                 np.real(
                     scipy.linalg.sqrtm(
-                        self.Gamma.numpy() + (self.s**2) * np.eye(self.Gamma.size()[0])
+                        self.Gamma.cpu().numpy()
+                        + (self.s**2) * np.eye(self.Gamma.size()[0])
                     )
                 )
             )
@@ -164,9 +165,9 @@ if __name__ == "__main__":
     )
 
     GP = GaussianProcess(d=d, s=s)
-    xtest = torch.from_numpy(interval(n, d))
+    xtest = torch.tensor(interval(n, d))
 
-    x = torch.from_numpy(np.random.uniform(-1, 1, size=(N, d)))
+    x = torch.tensor(np.random.uniform(-1, 1, size=(N, d)))
 
     F_true = lambda x: torch.sum(torch.sin(x) ** 2 - 0.1, dim=1).view(-1, 1)
     F = lambda x: F_true(x) + s * torch.randn(x.size()[0]).view(-1, 1).double()
@@ -177,8 +178,8 @@ if __name__ == "__main__":
     fig, axs = plt.subplots(msqrt, msqrt, figsize=(15, 7))
     for i in range(m):
         f_i = Emb.basis_fun(xtest, i)  ## basis function
-        xx = xtest[:, 0].numpy()
-        yy = xtest[:, 1].numpy()
+        xx = xtest[:, 0].cpu().numpy()
+        yy = xtest[:, 1].cpu().numpy()
         ax = axs[int(i // msqrt), (i % msqrt)]
         grid_x, grid_y = np.mgrid[min(xx) : max(xx) : 100j, min(yy) : max(yy) : 100j]
         grid_z_f = griddata(

@@ -151,7 +151,7 @@ if __name__ == "__main__":
     hierarchical_structure = HierarchicalBorelSets(d=1, interval=(-1, 1), levels=levels)
     Sets = hierarchical_structure.get_all_sets()
 
-    D = BorelSet(1, bounds=torch.Tensor([[-1.0, 1.0]]).double())
+    D = BorelSet(1, bounds=torch.tensor([[-1.0, 1.0]]).double())
 
     m = 128
     k = KernelFunction(gamma=gamma)

@@ -83,12 +83,12 @@ class BernoulliRateEstimator(RateEstimator):
             phi = self.embed_set(S)
 
             if self.phis is not None:
-                self.counts = torch.cat((self.counts, torch.Tensor([count])))
-                self.pool = torch.cat((self.pool, torch.Tensor([pool])))
+                self.counts = torch.cat((self.counts, torch.tensor([count])))
+                self.pool = torch.cat((self.pool, torch.tensor([pool])))
                 self.phis = torch.cat((self.phis, phi), dim=0)
             else:
-                self.counts = torch.Tensor([count]).double()
-                self.pool = torch.Tensor([pool]).double()
+                self.counts = torch.tensor([count]).double()
+                self.pool = torch.tensor([pool]).double()
                 self.phis = phi
 
     def nabla(self, theta):
@@ -214,7 +214,7 @@ class BernoulliRateEstimator(RateEstimator):
                 self.embed_set(S) @ self.rate
                 + beta * self.embed_set(S) @ self.invW @ self.embed_set(S).T
             )
-            return torch.minimum(torch.Tensor([[1.0]]).double(), ucb)
+            return torch.minimum(torch.tensor([[1.0]]).double(), ucb)
 
         elif self.uncertainty == "ratio":
             phi = self.embed_set(S)
@@ -251,7 +251,7 @@ class BernoulliRateEstimator(RateEstimator):
                 },
             )
             return torch.minimum(
-                torch.Tensor([[1.0]]).double(), torch.from_numpy(np.array(prob.value))
+                torch.tensor([[1.0]]).double(), torch.from_numpy(np.array(prob.value))
             )
 
     def lcb(self, S, beta=8.0, delta=0.1):
@@ -260,7 +260,7 @@ class BernoulliRateEstimator(RateEstimator):
                 self.embed_set(S) @ self.rate
                 - beta * self.embed_set(S) @ self.invW @ self.embed_set(S).T
             )
-            return torch.maximum(torch.Tensor([[0.0]]).double(), lcb)
+            return torch.maximum(torch.tensor([[0.0]]).double(), lcb)
 
         elif self.uncertainty == "ratio":
             phi = self.embed_set(S)
@@ -297,7 +297,7 @@ class BernoulliRateEstimator(RateEstimator):
             )
 
             return torch.maximum(
-                torch.Tensor([[0.0]]).double(), torch.from_numpy(np.array(prob.value))
+                torch.tensor([[0.0]]).double(), torch.from_numpy(np.array(prob.value))
             )
 
     def fit_gp(self, threads=4):

@@ -271,7 +271,7 @@ def solve_mpi(Q, c, tau, verbose=True, up=None, low=None, xwarm=None):
 
 def newton_solve(f, x0, eps=1e-3, maxiter=100, verbose=False, grad=None):
     """
-    >>> newton_solve(lambda x: x**2,torch.Tensor([2.0,1.0]).double().view(-1))
+    >>> newton_solve(lambda x: x**2,torch.tensor([2.0,1.0]).double().view(-1))
     tensor([0., 0.], dtype=torch.float64)
     """
     lam = 1.0
@@ -339,5 +339,5 @@ def matrix_recovery_hermitian_trace_regression(X, b, eps=1e-5):
 
 if __name__ == "__main__":
     newton_solve(
-        lambda x: x**2, torch.Tensor([2.0, 1.0]).double().view(-1), verbose=True
+        lambda x: x**2, torch.tensor([2.0, 1.0]).double().view(-1), verbose=True
     )

@@ -45,7 +45,7 @@ class MKL(Estimator):
 
     # def mean_vector(self):
     # 	theta = torch.zeros(size = (self.total_embed_dim()))
-    # 	dims_index = torch.cumsum(torch.Tensor([0] + self.get_emebed_dims()),dim = 0).int()
+    # 	dims_index = torch.cumsum(torch.tensor([0] + self.get_emebed_dims()),dim = 0).int()
     # 	for index, emb in enumerate(self.embeddings):
     # 		theta_small = emb.sample_theta()
     # 		theta[dims_index[index]:dims_index[index + 1]] = theta_small.view(-1)
@@ -78,7 +78,7 @@ class MKL(Estimator):
         n = xtest.size()[0]
         Phi = torch.zeros(size=(n, int(self.total_embed_dim())), dtype=torch.float64)
         dims_index = torch.cumsum(
-            torch.Tensor([0] + self.get_emebed_dims()), dim=0
+            torch.tensor([0] + self.get_emebed_dims()), dim=0
         ).int()
 
         for index, embedding in enumerate(self.embeddings):
@@ -129,7 +129,7 @@ class MKL(Estimator):
             values.append(self.evaluate_design(C, newPhi)[0])
             ranks.append(self.evaluate_design(C, newPhi)[1])
 
-        return [torch.Tensor(values), torch.Tensor(ranks)]
+        return [torch.tensor(values), torch.tensor(ranks)]
 
 
 if __name__ == "__main__":

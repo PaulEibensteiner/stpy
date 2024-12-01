@@ -35,5 +35,5 @@ class OnehotEmbedding(Embedding):
 
 if __name__ == "__main__":
     emb = OnehotEmbedding(20, 2)
-    x = torch.Tensor([[2, 3], [4, 5], [10, 19]])
+    x = torch.tensor([[2, 3], [4, 5], [10, 19]])
     print(emb.embed(x))

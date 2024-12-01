@@ -19,7 +19,7 @@ class PrimalMKL(RandomProcess):
         self.dims = []
         for embedding in self.embeddings:
             self.dims.append(embedding.get_basis_size())
-        sum = torch.sum(torch.Tensor(self.dims))
+        sum = torch.sum(torch.tensor(self.dims))
         return sum
 
     def get_emebed_dims(self):
@@ -43,7 +43,7 @@ class PrimalMKL(RandomProcess):
     # 	self.y = y
     # 	(self.n, self.d) = self.x.size()
     # 	self.total_m = self.total_embed_dim()
-    # 	dims_index = torch.cumsum(torch.Tensor([0] + self.get_emebed_dims()),dim = 0).int()
+    # 	dims_index = torch.cumsum(torch.tensor([0] + self.get_emebed_dims()),dim = 0).int()
     # 	self.w = [torch.ones(size = (i,1), dtype = torch.float64,requires_grad = True)  for i in self.get_emebed_dims()]
     #
     # 	self.theta = torch.ones(size = (self.no_models,1), dtype = torch.float64,requires_grad = True)
@@ -56,7 +56,7 @@ class PrimalMKL(RandomProcess):
         (self.n, self.d) = self.x.size()
         self.total_m = self.total_embed_dim()
         dims_index = torch.cumsum(
-            torch.Tensor([0] + self.get_emebed_dims()), dim=0
+            torch.tensor([0] + self.get_emebed_dims()), dim=0
         ).int()
 
         self.w = [
@@ -140,7 +140,7 @@ class PrimalMKL(RandomProcess):
     def mean_var(self, xtest):
         n = xtest.size()[0]
         dims_index = torch.cumsum(
-            torch.Tensor([0] + self.get_emebed_dims()), dim=0
+            torch.tensor([0] + self.get_emebed_dims()), dim=0
         ).int()
         Phi = torch.zeros(size=(n, int(self.total_m)), dtype=torch.float64)
 

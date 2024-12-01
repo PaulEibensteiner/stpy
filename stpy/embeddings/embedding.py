@@ -862,7 +862,7 @@ class AdditiveEmbeddings:
             self.groups = [[i] for i in range(len(self.emebeddings))]
 
         try:
-            self.ms = torch.Tensor(ms)
+            self.ms = torch.tensor(ms)
         except:
             self.ms = ms
 

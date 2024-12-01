@@ -1258,8 +1258,8 @@ class GaussianProcess(Estimator):
         sigma = lambda x: self.mean_std(x, reuse=True)[1][0][0]
 
         ucb = lambda x: torch.dot(
-            torch.Tensor([1.0, np.sqrt(beta)]),
-            torch.Tensor(
+            torch.tensor([1.0, np.sqrt(beta)]),
+            torch.tensor(
                 [
                     self.mean_std(x, reuse=True)[0][0][0],
                     self.mean_std(x, reuse=True)[1][0][0],
@@ -1267,8 +1267,8 @@ class GaussianProcess(Estimator):
             ),
         )
         lcb = lambda x: torch.dot(
-            torch.Tensor([1.0, np.sqrt(beta)]),
-            torch.Tensor(
+            torch.tensor([1.0, np.sqrt(beta)]),
+            torch.tensor(
                 [
                     self.mean_std(x, reuse=True)[0][0][0],
                     -self.mean_std(x, reuse=True)[1][0][0],

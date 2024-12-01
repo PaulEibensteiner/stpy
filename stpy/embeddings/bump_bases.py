@@ -105,7 +105,7 @@ class TriangleEmbedding(PositiveEmbedding):
                         tk = self.interval[0] + (j // self.m) * dm
 
                         # triangle center point
-                        # center_point = torch.Tensor( [tj,tk]).view(-1,1)
+                        # center_point = torch.tensor( [tj,tk]).view(-1,1)
                         vol = self.integrate_1d(xa.numpy(), xb.numpy(), tk, dm)
                         vol2 = self.integrate_1d(ya.numpy(), yb.numpy(), tj, dm)
                         psi[j] = float(vol * vol2)
@@ -198,7 +198,7 @@ class FaberSchauderEmbedding(TriangleEmbedding):
         for i in range(int(np.log2(self.m))):
             for j in range(2**i):
                 mask.append(i + 1)
-        return torch.Tensor(mask)
+        return torch.tensor(mask)
 
     def product_integral(self):
         raise NotImplementedError("Not implemented.")
@@ -304,7 +304,7 @@ class PositiveNystromEmbeddingBump(PositiveEmbedding):
         super().__init__(*args, **kwargs)
         self.samples = np.maximum(samples, self.m)
 
-        B = BorelSet(1, torch.Tensor([[self.interval[0], self.interval[1]]]).double())
+        B = BorelSet(1, torch.tensor([[self.interval[0], self.interval[1]]]).double())
         x = B.return_discretization(256)
         y = x[:, 0].view(-1, 1) * 0
 

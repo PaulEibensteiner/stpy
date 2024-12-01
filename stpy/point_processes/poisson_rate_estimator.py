@@ -267,7 +267,7 @@ class PoissonRateEstimator(RateEstimator):
 
             ## constraints
             eps = 10e-3
-            res = Gamma_half @ self.rate.view(-1, 1) - torch.from_numpy(l).view(-1, 1)
+            res = Gamma_half @ self.rate.view(-1, 1) - torch.tensor(l).view(-1, 1)
             xi = res.clone()
             xi[res > eps] = 0.0
 
@@ -291,7 +291,13 @@ class PoissonRateEstimator(RateEstimator):
         return self.beta_value
 
     def get_constraints(self):
-        return self.packing.get_constraints()
+        old_elements = self.packing.get_constraints()
+        new_elements = []
+        for element in old_elements:
+            if isinstance(element, np.ndarray):
+                element = torch.tensor(element)
+            new_elements.append(element)
+        return tuple(new_elements)
 
     def cov(self, inverse=False):
         return self.packing.cov(inverse=inverse)
@@ -355,8 +361,8 @@ class PoissonRateEstimator(RateEstimator):
         l, Lambda, u = self.get_constraints()
         Gamma_half, invGamma_half = self.cov(inverse=True)
 
-        v = torch.from_numpy((u + l) / 2.0).view(-1, 1)
-        S = torch.diag(torch.from_numpy(u - l).view(-1) / 2.0).double()
+        v = torch.tensor((u + l) / 2.0).view(-1, 1)
+        S = torch.diag(torch.tensor(u - l).view(-1) / 2.0).double()
 
         phis = self.phis.clone() @ invGamma_half
 
@@ -429,8 +435,8 @@ class PoissonRateEstimator(RateEstimator):
 
         u_new = u + 0.01
         l_new = l - 0.01
-        v2 = torch.from_numpy((u_new + l_new) / 2.0).view(-1, 1)
-        S2 = torch.diag(torch.from_numpy(u_new - l_new).view(-1) / 2.0).double()
+        v2 = torch.tensor((u_new + l_new) / 2.0).view(-1, 1)
+        S2 = torch.diag(torch.tensor(u_new - l_new).view(-1) / 2.0).double()
         #
         y.data = torch.inverse(S2) @ (y.data - v2)
         y.data = torch.atanh(y.data)
@@ -444,7 +450,7 @@ class PoissonRateEstimator(RateEstimator):
         )
         L = float(
             scipy.sparse.linalg.eigsh(
-                W.numpy(), k=1, which="LM", return_eigenvectors=False, tol=1e-8
+                W.cpu().numpy(), k=1, which="LM", return_eigenvectors=False, tol=1e-8
             )
         )
         eta = 0.05 / (L + 1)
@@ -473,12 +479,12 @@ class PoissonRateEstimator(RateEstimator):
         Gamma_half = self.packing.cov()
 
         def prox(x):
-            z = x.numpy()
+            z = x.cpu().numpy()
             theta = cp.Variable((self.get_m(), 1))
             objective = cp.Minimize(cp.sum_squares(z - theta))
             constraints = []
             l, Lambda, u = self.get_constraints()
-            Lambda = Lambda @ Gamma_half.numpy()
+            Lambda = Lambda @ Gamma_half.cpu().numpy()
             constraints.append(Lambda @ theta >= l.reshape(-1, 1))
             prob = cp.Problem(objective, constraints)
             prob.solve(
@@ -488,7 +494,7 @@ class PoissonRateEstimator(RateEstimator):
                 eps_abs=1e-3,
                 eps_rel=1e-3,
             )
-            return torch.from_numpy(theta.value)
+            return torch.tensor(theta.value)
 
         if self.feedback == "count-record" and self.dual == False:
             if self.observations is not None:
@@ -544,7 +550,7 @@ class PoissonRateEstimator(RateEstimator):
         W = self.construct_covariance_matrix_laplace(minimal=True)
         L = float(
             scipy.sparse.linalg.eigsh(
-                W.numpy(), k=1, which="LM", return_eigenvectors=False, tol=1e-5
+                W.cpu().numpy(), k=1, which="LM", return_eigenvectors=False, tol=1e-5
             )
         )
 
@@ -572,17 +578,17 @@ class PoissonRateEstimator(RateEstimator):
         Gamma_half, invGamma_half = self.packing.cov(inverse=True)
         # invGamma = invGamma_half.T @ invGamma_half
         l, Lambda, u = self.get_constraints()
-        Lambda = Lambda @ Gamma_half.numpy()
+        Lambda = Lambda @ Gamma_half.cpu().numpy()
 
         def prox(x):
             res = solve_qp(
                 np.eye(self.get_m()),
-                x.numpy().reshape(-1),
-                C=Gamma_half.numpy(),
+                x.cpu().numpy().reshape(-1),
+                C=Gamma_half.cpu().numpy(),
                 b=np.array(l),
                 factorized=True,
             )
-            return torch.from_numpy(res[0]).view(-1, 1)
+            return torch.tensor(res[0]).view(-1, 1)
 
         # theta_n = cp.Variable((self.get_m(), 1))
         # x = cp.Parameter((self.get_m(), 1))
@@ -590,14 +596,14 @@ class PoissonRateEstimator(RateEstimator):
         #
         # constraints = []
         # l, Lambda, u = self.get_constraints()
-        # Lambda = Lambda @ Gamma_half.numpy()
+        # Lambda = Lambda @ Gamma_half.cpu().numpy()
         # constraints.append(Lambda @ theta_n >= l.reshape(-1, 1))
         # constraints.append(Lambda @ theta_n <= u.reshape(-1, 1))
         #
         # prob = cp.Problem(objective, constraints)
 
         # def prox(x):
-        # 	return Gamma_half @ torch.from_numpy(scipy.optimize.nnls(invGamma.numpy(), (invGamma_half@x).numpy().reshape(-1), maxiter = 1000)[0]).view(-1,1)
+        # 	return Gamma_half @ torch.tensor(scipy.optimize.nnls(invGamma.cpu().numpy(), (invGamma_half@x).numpy().reshape(-1), maxiter = 1000)[0]).view(-1,1)
 
         samples = []
 
@@ -673,7 +679,11 @@ class PoissonRateEstimator(RateEstimator):
             W = self.construct_covariance_matrix_laplace(theta=theta)
             L = float(
                 scipy.sparse.linalg.eigsh(
-                    W.numpy(), k=1, which="LM", return_eigenvectors=False, tol=1e-3
+                    W.cpu().numpy(),
+                    k=1,
+                    which="LM",
+                    return_eigenvectors=False,
+                    tol=1e-3,
                 )
             )
             if stepsize is not None:
@@ -682,9 +692,9 @@ class PoissonRateEstimator(RateEstimator):
                 eta = 0.5 / L
 
             # prox calculate
-            # x.value = theta.numpy()
+            # x.value = theta.cpu().numpy()
             # prob.solve(solver=cp.OSQP, warm_start=True, verbose=False, eps_abs=1e-3, eps_rel=1e-3)
-            # proximal_theta = torch.from_numpy(theta_n.value)
+            # proximal_theta = torch.tensor(theta_n.value)
 
             # update step
             # 			theta = 0.5 * theta - eta * nabla(theta) + 0.5 * proximal_theta + np.sqrt(2 * eta) * w
@@ -710,8 +720,8 @@ class PoissonRateEstimator(RateEstimator):
         Gamma_half, invGamma_half = self.packing.cov(inverse=True)
         l, Lambda, u = self.get_constraints()
         prox_simple = lambda x: torch.minimum(
-            torch.maximum(x.view(-1), torch.from_numpy(l).view(-1)),
-            torch.from_numpy(u).view(-1),
+            torch.maximum(x.view(-1), torch.tensor(l).view(-1)),
+            torch.tensor(u).view(-1),
         ).view(-1, 1)
 
         def prox(x):
@@ -803,7 +813,7 @@ class PoissonRateEstimator(RateEstimator):
         W = self.construct_covariance_matrix_laplace()
         L = float(
             scipy.sparse.linalg.eigsh(
-                W.numpy(), k=1, which="LM", return_eigenvectors=False, tol=1e-5
+                W.cpu().numpy(), k=1, which="LM", return_eigenvectors=False, tol=1e-5
             )
         )
 
@@ -883,7 +893,7 @@ class PoissonRateEstimator(RateEstimator):
         Gamma_half = self.packing.cov()
         lz, Lambda, u = self.get_constraints()
 
-        Lambda = torch.from_numpy(Lambda) @ Gamma_half
+        Lambda = torch.tensor(Lambda) @ Gamma_half
         y = (
             self.b
             + 0.05
@@ -905,7 +915,7 @@ class PoissonRateEstimator(RateEstimator):
         W = self.construct_covariance_matrix_laplace()
         L = float(
             scipy.sparse.linalg.eigsh(
-                W.numpy(), k=1, which="LM", return_eigenvectors=False, tol=1e-5
+                W.cpu().numpy(), k=1, which="LM", return_eigenvectors=False, tol=1e-5
             )
         )
 
@@ -946,7 +956,7 @@ class PoissonRateEstimator(RateEstimator):
 
             # x0 = y.reshape(-1).clone().detach().numpy()
             # res = minimize(objective, x0, backend='torch', method='Newton-CG', precision='float64', tol=1e-5, hvp_type='vhp')
-            # y.data = torch.from_numpy(res.x)
+            # y.data = torch.tensor(res.x)
 
             x0 = y.reshape(-1).clone()
             res = minimize_torch(objective, x0, method="newton-cg", tol=1e-5)
@@ -962,7 +972,7 @@ class PoissonRateEstimator(RateEstimator):
         Gamma_half, invGamma_half = self.packing.cov(inverse=True)
         invGamma = invGamma_half.T @ invGamma_half
         l, Lambda, u = self.get_constraints()
-        Lambda = torch.from_numpy(Lambda) @ Gamma_half
+        Lambda = torch.tensor(Lambda) @ Gamma_half
 
         if self.data is not None:
             if self.feedback == "count-record" and self.dual == False:
@@ -1004,7 +1014,7 @@ class PoissonRateEstimator(RateEstimator):
         W = invGamma_half.T @ self.construct_covariance_matrix_laplace() @ invGamma_half
         L = float(
             scipy.sparse.linalg.eigsh(
-                W.numpy(), k=1, which="LM", return_eigenvectors=False, tol=1e-5
+                W.cpu().numpy(), k=1, which="LM", return_eigenvectors=False, tol=1e-5
             )
         )
 
@@ -1029,7 +1039,7 @@ class PoissonRateEstimator(RateEstimator):
 
             w0 = eta * nabla_val.data + 1.0 / y.data
             # initial point for the solve
-            # w0 = -1./( torch.from_numpy(x.value))
+            # w0 = -1./( torch.tensor(x.value))
 
             # simulate
             f = lambda w, n: n / torch.abs(w)
@@ -1089,7 +1099,7 @@ class PoissonRateEstimator(RateEstimator):
         W = self.construct_covariance_matrix_laplace(minimal=True)
         L = float(
             scipy.sparse.linalg.eigsh(
-                W.numpy(), k=1, which="LM", return_eigenvectors=False, tol=1e-5
+                W.cpu().numpy(), k=1, which="LM", return_eigenvectors=False, tol=1e-5
             )
         )
 
@@ -1382,7 +1392,7 @@ class PoissonRateEstimator(RateEstimator):
             },
         )
 
-        self.rate = invGamma_half.cpu() @ torch.from_numpy(res.x)
+        self.rate = invGamma_half @ torch.tensor(res.x)
         print(res.message)
         return self.rate
 
@@ -1399,9 +1409,9 @@ class PoissonRateEstimator(RateEstimator):
         if self.dual == False:
 
             # using all points without anchor points
-            phis = self.phis.numpy()
+            phis = self.phis.cpu().numpy()
             if self.observations is not None:
-                observations = self.observations.numpy()
+                observations = self.observations.cpu().numpy()
                 objective = cp.Minimize(
                     -cp.sum(cp.log(observations @ theta))
                     + cp.sum(phis @ theta)
@@ -1420,8 +1430,8 @@ class PoissonRateEstimator(RateEstimator):
             tau = self.total_bucketized_time[mask].clone().numpy()
 
             if self.observations is not None:
-                observations = self.anchor_points_emb.numpy()
-                weights = self.anchor_weights.numpy()
+                observations = self.anchor_points_emb.cpu().numpy()
+                weights = self.anchor_weights.cpu().numpy()
                 mask = weights > 0.0
                 objective = cp.Minimize(
                     -cp.sum(
@@ -1440,15 +1450,15 @@ class PoissonRateEstimator(RateEstimator):
 
         constraints = []
 
-        Lambda = Lambda @ Gamma_half.numpy()
+        Lambda = (Lambda @ Gamma_half).cpu().numpy()
 
-        constraints.append(Lambda @ theta >= l)
-        constraints.append(Lambda @ theta <= u)
+        constraints.append(Lambda @ theta >= l.cpu().numpy())
+        constraints.append(Lambda @ theta <= u.cpu().numpy())
 
         prob = cp.Problem(objective, constraints)
 
         if self.rate is not None:
-            theta.value = self.rate.numpy()
+            theta.value = self.rate.cpu().numpy()
 
         try:
             prob.solve(
@@ -1464,7 +1474,7 @@ class PoissonRateEstimator(RateEstimator):
                 },
             )
 
-            self.rate = torch.from_numpy(theta.value)
+            self.rate = torch.tensor(theta.value)
             return self.rate
         except:
             print("Optimization failed. Using the old value.")
@@ -1473,8 +1483,8 @@ class PoissonRateEstimator(RateEstimator):
 
     def penalized_likelihood_integral(self, threads=4):
 
-        phis = self.phis.numpy()
-        counts = self.counts.numpy()
+        phis = self.phis.cpu().numpy()
+        counts = self.counts.cpu().numpy()
 
         theta = cp.Variable(self.get_m())
         l, Lambda, u = self.get_constraints()
@@ -1491,7 +1501,7 @@ class PoissonRateEstimator(RateEstimator):
         constraints.append(Lambda @ theta <= u)
 
         # if self.rate is not None:
-        # 	theta.value = self.rate.numpy()
+        # 	theta.value = self.rate.cpu().numpy()
         try:
             prob = cp.Problem(objective, constraints)
             prob.solve(
@@ -1506,7 +1516,7 @@ class PoissonRateEstimator(RateEstimator):
                     mosek.dparam.intpnt_co_tol_rel_gap: 1e-4,
                 },
             )
-            self.rate = torch.from_numpy(theta.value)
+            self.rate = torch.tensor(theta.value)
         except:
             print("Optimization failed. Using the old value.")
             print(prob.status)
@@ -1549,7 +1559,7 @@ class PoissonRateEstimator(RateEstimator):
             else:
                 for index, elementary in enumerate(basic_sets):
                     if S.inside(elementary) == True:
-                        data_basic[index].append(torch.Tensor([]))
+                        data_basic[index].append(torch.tensor([]))
                         counts[index] += 1
                         sensing_times[index].append(dt)
 
@@ -1647,7 +1657,7 @@ class PoissonRateEstimator(RateEstimator):
             },
         )
         print(prob.status)
-        self.rate = torch.from_numpy(theta.value)
+        self.rate = torch.tensor(theta.value)
         return self.rate
 
     def least_sqaures_weighted_fast(self, threads=4):
@@ -1688,7 +1698,7 @@ class PoissonRateEstimator(RateEstimator):
         eps = 1e-4
         res = minimize(
             objective,
-            theta0.numpy(),
+            theta0.cpu().numpy(),
             backend="torch",
             method="L-BFGS-B",
             bounds=(l[0] + eps, u[0]),
@@ -1703,7 +1713,7 @@ class PoissonRateEstimator(RateEstimator):
                 "maxls": 20,
             },
         )
-        self.rate = invGamma_half @ torch.from_numpy(res.x)
+        self.rate = invGamma_half @ torch.tensor(res.x)
 
         return self.rate
 
@@ -1718,12 +1728,12 @@ class PoissonRateEstimator(RateEstimator):
 
         phis = self.phis.clone().numpy()  # integrated actions
         if self.rate is None:
-            rate = torch.pinverse(torch.from_numpy(Gamma_half)) @ torch.from_numpy(u)
+            rate = torch.pinverse(torch.tensor(Gamma_half)) @ torch.tensor(u)
         else:
             rate = self.rate.clone()
 
         if len(self.variances_histogram) > 0:
-            variances = self.variances_histogram.numpy()
+            variances = self.variances_histogram.cpu().numpy()
 
             for i in range(variances.shape[0]):
                 variances[i] = variances[i] * self.variance_correction(variances[i])
@@ -1760,7 +1770,7 @@ class PoissonRateEstimator(RateEstimator):
             },
         )
 
-        self.rate = torch.from_numpy(theta.value)
+        self.rate = torch.tensor(theta.value)
 
         return self.rate
 
@@ -1788,14 +1798,14 @@ class PoissonRateEstimator(RateEstimator):
         try:
             prob.solve(solver=cp.CLARABEL, warm_start=False, verbose=True)
 
-            self.rate = torch.from_numpy(theta.value)
+            self.rate = torch.tensor(theta.value)
         except:
             print("optimization failed.")
         return self.rate
 
     def penalized_likelihood_integral_bins(self, threads=4):
-        phis = self.phis.numpy()
-        counts = self.counts.numpy()
+        phis = self.phis.cpu().numpy()
+        counts = self.counts.cpu().numpy()
 
         theta = cp.Variable(self.get_m())
         l, Lambda, u = self.get_constraints()
@@ -1817,7 +1827,7 @@ class PoissonRateEstimator(RateEstimator):
             else:
                 prob = cp.Problem(objective)
             prob.solve(solver=cp.CLARABEL, warm_start=False, verbose=True)
-            self.rate = torch.from_numpy(theta.value)
+            self.rate = torch.tensor(theta.value)
         except:
             print("Optimization failed. Using the old value.")
 
@@ -1841,10 +1851,10 @@ class PoissonRateEstimator(RateEstimator):
                     new_var = []
                     for S, _, dt in self.data:
                         new_var.append(float(self.ucb(S)) * dt)
-                    self.variances_histogram = torch.Tensor(new_var.copy()).double()
+                    self.variances_histogram = torch.tensor(new_var.copy()).double()
                 else:
                     last = self.data[-1]
-                    new_var = torch.Tensor([self.ucb(last[0]) * last[2]]).double()
+                    new_var = torch.tensor([self.ucb(last[0]) * last[2]]).double()
                     if len(self.variances_histogram) > 0:
                         self.variances_histogram = torch.cat(
                             (self.variances_histogram, new_var)
@@ -1898,10 +1908,22 @@ class PoissonRateEstimator(RateEstimator):
 
         Lambda = Lambda @ Gamma_half
         ucb, _ = maximize_on_elliptical_slice(
-            phi.numpy(), (W).numpy(), self.rate.view(-1).numpy(), beta, l, Lambda, u
+            phi.cpu().numpy(),
+            (W).numpy(),
+            self.rate.view(-1).cpu().numpy(),
+            beta,
+            l,
+            Lambda,
+            u,
         )
         lcb, _ = maximize_on_elliptical_slice(
-            -phi.numpy(), (W).numpy(), self.rate.view(-1).numpy(), beta, l, Lambda, u
+            -phi.cpu().numpy(),
+            (W).numpy(),
+            self.rate.view(-1).cpu().numpy(),
+            beta,
+            l,
+            Lambda,
+            u,
         )
         map = phi @ self.rate
 
@@ -1936,8 +1958,8 @@ class PoissonRateEstimator(RateEstimator):
             + 0.5 * self.s * torch.norm(self.rate) ** 2
         )
 
-        phis = self.phis.numpy()
-        counts = self.counts.numpy()
+        phis = self.phis.cpu().numpy()
+        counts = self.counts.cpu().numpy()
         theta = cp.Variable(self.get_m())
         l, Lambda, u = self.get_constraints()
         Gamma_half = self.cov().numpy()
@@ -2120,10 +2142,10 @@ class PoissonRateEstimator(RateEstimator):
             ucbs = []
             for action in actions:
                 phi_a = self.packing.integral(action) * dt
-                # ucb, _ = maximize_on_elliptical_slice(phi_a.numpy()-phi.numpy(), self.W.numpy(), self.rate.view(-1).numpy(), beta, l, Lambda, u)
+                # ucb, _ = maximize_on_elliptical_slice(phi_a.cpu().numpy()-phi.cpu().numpy(), self.W.cpu().numpy(), self.rate.view(-1).numpy(), beta, l, Lambda, u)
                 ucb, _ = maximize_on_elliptical_slice(
-                    phi.numpy(),
-                    self.W.numpy(),
+                    phi.cpu().numpy(),
+                    self.W.cpu().numpy(),
                     self.rate.view(-1).numpy(),
                     beta,
                     l,
@@ -2131,7 +2153,7 @@ class PoissonRateEstimator(RateEstimator):
                     u,
                 )
                 ucbs.append(float(ucb))
-            gap = torch.max(torch.Tensor(ucbs))
+            gap = torch.max(torch.tensor(ucbs))
 
         else:
             if self.data is None:
@@ -2271,7 +2293,7 @@ class PoissonRateEstimator(RateEstimator):
         for i in range(N):
             x = Phi[i, :]
             ucbi, _ = maximize_on_elliptical_slice(
-                x.numpy(),
+                x.cpu().numpy(),
                 (W).numpy(),
                 self.rate.view(-1).numpy(),
                 np.sqrt(beta),
@@ -2280,7 +2302,7 @@ class PoissonRateEstimator(RateEstimator):
                 u,
             )
             lcbi, _ = maximize_on_elliptical_slice(
-                -x.numpy(),
+                -x.cpu().numpy(),
                 (W).numpy(),
                 self.rate.view(-1).numpy(),
                 np.sqrt(beta),
@@ -2310,7 +2332,7 @@ class PoissonRateEstimator(RateEstimator):
         ucb = torch.zeros(size=(N, 1)).double()
         lcb = torch.zeros(size=(N, 1)).double()
 
-        phis = self.phis.numpy()
+        phis = self.phis.cpu().numpy()
 
         if current:
             if self.observations is not None:
@@ -2347,7 +2369,7 @@ class PoissonRateEstimator(RateEstimator):
         Lambda = Lambda @ Gamma_half
 
         for i in range(N):
-            x = Phi[i, :].numpy()
+            x = Phi[i, :].cpu().numpy()
 
             theta = cp.Variable(self.get_m())
 
@@ -2360,7 +2382,7 @@ class PoissonRateEstimator(RateEstimator):
 
             if self.feedback == "count-record":
                 if self.observations is not None:
-                    observations = self.observations.numpy()
+                    observations = self.observations.cpu().numpy()
 
                     constraints.append(
                         -cp.sum(cp.log(observations @ theta))
@@ -2416,7 +2438,7 @@ class PoissonRateEstimator(RateEstimator):
         if n > 0:
 
             phis = self.varphis[index].repeat(n, 1)
-            res = torch.Tensor(self.bucketized_obs[index]).double()
+            res = torch.tensor(self.bucketized_obs[index]).double()
 
             err = torch.abs(res - (phis @ theta.view(-1, 1)).view(-1))
 
@@ -2445,9 +2467,9 @@ class PoissonRateEstimator(RateEstimator):
             lcb.append(l)
 
         return (
-            torch.Tensor(map).double(),
-            torch.Tensor(ucb).double(),
-            torch.Tensor(lcb).double(),
+            torch.tensor(map).double(),
+            torch.tensor(ucb).double(),
+            torch.tensor(lcb).double(),
         )
 
     def conformal_confidence_set(self, S, delta=0.05, max_val=20, dt=1.0, step=1):
@@ -2485,7 +2507,7 @@ class PoissonRateEstimator(RateEstimator):
             if j > 0:
                 obs = torch.zeros(size=(j, self.d)).double()
                 for i in range(self.d):
-                    obs[:, i] = torch.from_numpy(
+                    obs[:, i] = torch.tensor(
                         np.random.uniform(S.bounds[i, 0], S.bounds[i, 1], size=j)
                     )
             else:
@@ -2522,7 +2544,7 @@ class PoissonRateEstimator(RateEstimator):
             if j > 0:
                 obs = torch.zeros(size=(j, self.d)).double()
                 for i in range(self.d):
-                    obs[:, i] = torch.from_numpy(
+                    obs[:, i] = torch.tensor(
                         np.random.uniform(S.bounds[i, 0], S.bounds[i, 1], size=j)
                     )
             else:

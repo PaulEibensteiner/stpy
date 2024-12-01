@@ -31,13 +31,13 @@ class SeasonalPoissonPointProcess(PoissonPointProcess):
             if self.d == 1:
                 # integrate = S.volume()* self.rate(torch.from_numpy(S.bounds[0,1]).view(1))
                 integral, _ = integrate.quad(
-                    lambda x: rate(torch.Tensor([x]).view(1, 1), t).numpy(),
+                    lambda x: rate(torch.tensor([x]).view(1, 1), t).numpy(),
                     float(S.bounds[0, 0]),
                     float(S.bounds[0, 1]),
                 )
             elif self.d == 2:
                 integrand = lambda x, y: rate(
-                    torch.Tensor([x, y], t).view(1, 2).double()
+                    torch.tensor([x, y], t).view(1, 2).double()
                 ).numpy()
                 integral, _ = integrate.dblquad(
                     integrand,

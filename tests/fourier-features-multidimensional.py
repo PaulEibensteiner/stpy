@@ -21,7 +21,7 @@ if __name__ == "__main__":
     ytest = F(xtest)
 
     GP = GaussianProcessFF(
-        d=2, groups=[[0, 1]], m=torch.Tensor([m, 64]), gamma=torch.Tensor([0.2])
+        d=2, groups=[[0, 1]], m=torch.tensor([m, 64]), gamma=torch.tensor([0.2])
     )
     GP.fit_gp(xtest, ytest)
 

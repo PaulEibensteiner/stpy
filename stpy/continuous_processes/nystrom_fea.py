@@ -149,8 +149,8 @@ class NystromFeatures(Embedding):
             ysample = GP.sample(x, size=self.samples) ** 2
             X = ysample
             model = NMF(n_components=self.ms, max_iter=8000, tol=1e-12)
-            W = torch.from_numpy(model.fit_transform(X))
-            H = torch.from_numpy(model.components_)
+            W = torch.tensor(model.fit_transform(X.cpu()))
+            H = torch.tensor(model.components_)
             l = torch.norm(W, dim=1)
             l = 1.0 / l
 
@@ -159,22 +159,25 @@ class NystromFeatures(Embedding):
                 for j in range(self.ms):
                     fs.append(
                         interp1d(
-                            x.view(-1).numpy(), (W.T @ torch.diag(l))[j, :].numpy()
+                            x.view(-1).cpu().numpy(),
+                            (W.T @ torch.diag(l))[j, :].cpu().numpy(),
                         )
                     )
                 self.embed = lambda q: torch.cat(
-                    [torch.from_numpy(fs[j](q)).view(-1, 1) for j in range(self.ms)],
+                    [torch.tensor(fs[j](q)).view(-1, 1) for j in range(self.ms)],
                     dim=1,
                 )
 
             elif x.size()[1] == 2:
                 fs = []
                 for j in range(self.ms):
-                    W_j = (W.T @ torch.diag(l))[j, :].numpy()
-                    fs.append(LinearNDInterpolator(x, W_j))
+                    W_j = (W.T @ torch.diag(l))[j, :].cpu().numpy()
+                    fs.append(LinearNDInterpolator(x.cpu().numpy(), W_j))
                 self.embed = lambda q: torch.cat(
                     [
-                        torch.from_numpy(fs[j](q[:, 0], q[:, 1])).view(-1, 1)
+                        torch.tensor(
+                            fs[j](q[:, 0].cpu().numpy(), q[:, 1].cpu().numpy())
+                        ).view(-1, 1)
                         for j in range(self.ms)
                     ],
                     dim=1,
@@ -182,9 +185,9 @@ class NystromFeatures(Embedding):
             # elif x.size()[1] == 2:
             # 	fs = []
             # 	for j in range(self.ms):
-            # 		W_j = (W.T @ torch.diag(l))[j, :].numpy()
+            # 		W_j = (W.T @ torch.diag(l))[j, :].cpu().numpy()
             # 		fs.append(Rbf(x[:,0],x[:,1], W_j))
-            # 	self.embed = lambda q: torch.cat([torch.from_numpy(fs[j](q[:,0],q[:,1])).view(-1, 1) for j in range(self.ms)],
+            # 	self.embed = lambda q: torch.cat([torch.tensor(fs[j](q[:,0],q[:,1])).view(-1, 1) for j in range(self.ms)],
             # 									 dim=1)
 
             self.C = []
@@ -193,7 +196,7 @@ class NystromFeatures(Embedding):
             K = self.kernel(
                 x, x
             )  # + self.s * self.s * torch.eye(self.N, dtype=torch.float64)
-            Khalf = torch.from_numpy(np.real(scipy.linalg.sqrtm(K.numpy())))
+            Khalf = torch.tensor(np.real(scipy.linalg.sqrtm(K.cpu().numpy())))
             Khalfinv = torch.pinverse(Khalf)
             self.embed = lambda q: torch.t(torch.mm(Khalfinv, self.kernel(q, self.x)))
         else:
@@ -288,24 +291,32 @@ class NystromFeatures(Embedding):
 
             plt.figure(figsize=(15, 7))
             plt.clf()
-            plt.plot(self.x.numpy(), self.y.numpy(), "r+", ms=10, marker="o")
             plt.plot(
-                self.x[self.C, :].numpy(),
-                self.y[self.C, :].numpy(),
+                self.x.cpu().numpy(), self.y.cpu().numpy(), "r+", ms=10, marker="o"
+            )
+            plt.plot(
+                self.x[self.C, :].cpu().numpy(),
+                self.y[self.C, :].cpu().numpy(),
                 "g+",
                 ms=10,
                 marker="o",
             )
-            # plt.plot(xtest.numpy(), self.sample(xtest, size=2).numpy(), 'k--', lw=2, label="sample")
+            # plt.plot(xtest.cpu().numpy(), self.sample(xtest, size=2).cpu().numpy(), 'k--', lw=2, label="sample")
             plt.fill_between(
-                xtest.numpy().flat,
-                (mu - 2 * std).numpy().flat,
-                (mu + 2 * std).numpy().flat,
+                xtest.cpu().numpy().flat,
+                (mu - 2 * std).cpu().numpy().flat,
+                (mu + 2 * std).cpu().numpy().flat,
                 color="#dddddd",
             )
             if f_true is not None:
-                plt.plot(xtest.numpy(), f_true(xtest).numpy(), "b-", lw=2)
-            plt.plot(xtest.numpy(), mu.numpy(), "r-", lw=2, label="posterior mean")
+                plt.plot(xtest.cpu().numpy(), f_true(xtest).cpu().numpy(), "b-", lw=2)
+            plt.plot(
+                xtest.cpu().numpy(),
+                mu.cpu().numpy(),
+                "r-",
+                lw=2,
+                label="posterior mean",
+            )
             plt.title("Posterior mean prediction plus 2 st.deviation")
             plt.legend()
             if show == True:
@@ -317,27 +328,27 @@ class NystromFeatures(Embedding):
             plt.figure(figsize=(15, 7))
             plt.clf()
             ax = plt.axes(projection="3d")
-            xx = xtest[:, 0].numpy()
-            yy = xtest[:, 1].numpy()
+            xx = xtest[:, 0].cpu().numpy()
+            yy = xtest[:, 1].cpu().numpy()
             grid_x, grid_y = np.mgrid[
                 min(xx) : max(xx) : 100j, min(yy) : max(yy) : 100j
             ]
             grid_z_mu = griddata(
-                (xx, yy), mu[:, 0].numpy(), (grid_x, grid_y), method="linear"
+                (xx, yy), mu[:, 0].cpu().numpy(), (grid_x, grid_y), method="linear"
             )
             if f_true is not None:
                 grid_z = griddata(
                     (xx, yy),
-                    f_true(xtest)[:, 0].numpy(),
+                    f_true(xtest)[:, 0].cpu().numpy(),
                     (grid_x, grid_y),
                     method="linear",
                 )
                 ax.plot_surface(grid_x, grid_y, grid_z, color="b", alpha=0.4)
             if points == True:
                 ax.scatter(
-                    self.x[:, 0].numpy(),
-                    self.x[:, 1].numpy(),
-                    self.y[:, 0].numpy(),
+                    self.x[:, 0].cpu().numpy(),
+                    self.x[:, 1].cpu().numpy(),
+                    self.y[:, 0].cpu().numpy(),
                     c="r",
                     s=100,
                     marker="o",
@@ -363,13 +374,11 @@ if __name__ == "__main__":
     # number of intial points
     N = 100
     # smoothness
-    gamma = torch.from_numpy(np.array([0.4, 0.4]))
+    gamma = torch.tensor(np.array([0.4, 0.4]))
     # test problem
 
-    xtest = torch.from_numpy(interval(n, d))
-    x = torch.from_numpy(
-        np.random.uniform(-L_infinity_ball, L_infinity_ball, size=(N, d))
-    )
+    xtest = torch.tensor(interval(n, d))
+    x = torch.tensor(np.random.uniform(-L_infinity_ball, L_infinity_ball, size=(N, d)))
 
     f_no_noise = lambda q: torch.sin(torch.sum(q * 4, dim=1)).view(-1, 1)
     # f_no_noise = lambda q: torch.sin((q[:,0] * 4)).view(-1, 1)
@@ -391,15 +400,15 @@ if __name__ == "__main__":
     GP0.fit_gp(x, y)
     GP0.visualize(xtest, f_true=f_no_noise)
 
-    GP = NystromFeatures(kernel, m=torch.Tensor([30]), s=s, approx="uniform")
+    GP = NystromFeatures(kernel, m=torch.tensor([30]), s=s, approx="uniform")
     GP.fit_gp(x, y)
     GP.visualize(xtest, f_true=f_no_noise)
 
-    GP = NystromFeatures(kernel, m=torch.Tensor([30]), s=s, approx="online_leverage")
+    GP = NystromFeatures(kernel, m=torch.tensor([30]), s=s, approx="online_leverage")
     GP.fit_gp(x, y)
     GP.visualize(xtest, f_true=f_no_noise)
 
-    GP = NystromFeatures(kernel, m=torch.Tensor([30]), s=s, approx="svd")
+    GP = NystromFeatures(kernel, m=torch.tensor([30]), s=s, approx="svd")
     GP.fit_gp(x, y)
     print(GP0.K, GP.outer_kernel())
     GP.visualize(xtest, f_true=f_no_noise)

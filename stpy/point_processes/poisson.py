@@ -44,13 +44,13 @@ class PoissonPointProcess:
             if self.d == 1:
                 # integrate = S.volume()* self.rate(torch.from_numpy(S.bounds[0,1]).view(1))
                 integral, _ = integrate.quad(
-                    lambda x: rate(torch.Tensor([x]).view(1, 1)).numpy(),
+                    lambda x: rate(torch.tensor([x]).view(1, 1)).numpy(),
                     float(S.bounds[0, 0]),
                     float(S.bounds[0, 1]),
                 )
             elif self.d == 2:
                 integrand = lambda x, y: rate(
-                    torch.Tensor([x, y]).view(1, 2).double()
+                    torch.tensor([x, y]).view(1, 2).double()
                 ).numpy()
                 integral, _ = integrate.dblquad(
                     integrand,
@@ -190,7 +190,7 @@ class PoissonPointProcess:
 if __name__ == "__main__":
     d = 2
     n = 100
-    bounds = torch.Tensor([[-1, 1], [-1, 1]]).double()
+    bounds = torch.tensor([[-1, 1], [-1, 1]]).double()
     D = BorelSet(d, bounds)
 
     process = PoissonPointProcess(d=d, B=2)

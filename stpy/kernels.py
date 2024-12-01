@@ -56,7 +56,7 @@ class KernelFunction:
                 self.ard_gamma = torch.ones(d).double()
             else:
                 try:
-                    self.ard_gamma = torch.Tensor([ard_gamma]).double()
+                    self.ard_gamma = torch.tensor([ard_gamma]).double()
                 except:
                     self.ard_gamma = ard_gamma
             self.power = power

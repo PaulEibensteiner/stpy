@@ -13,8 +13,8 @@ d = 2
 thetae = np.radians(35.0)
 ce, se = np.cos(thetae), np.sin(thetae)
 R = torch.from_numpy(np.array(((ce, -se), (se, ce))))
-D = torch.diag(torch.Tensor([0.8, 1.1]).double())
-# D = torch.diag(torch.Tensor([1, 1]).double())
+D = torch.diag(torch.tensor([0.8, 1.1]).double())
+# D = torch.diag(torch.tensor([1, 1]).double())
 
 W = R.T @ D @ R
 print(W)
@@ -74,10 +74,10 @@ embedding = PolynomialEmbedding(d, p)
 Map = lambda x: embedding.embed(x)
 
 # Starting points
-x0_1 = torch.Tensor([0.1, 0.1]).double().view(-1, d)
+x0_1 = torch.tensor([0.1, 0.1]).double().view(-1, d)
 
-# x0_1 = torch.Tensor([-0.1, 0.]).double().view(-1, d)
-x0_2 = torch.Tensor([0.1, 0.1]).double().view(-1, d)
+# x0_1 = torch.tensor([-0.1, 0.]).double().view(-1, d)
+x0_2 = torch.tensor([0.1, 0.1]).double().view(-1, d)
 
 print("Embeding size:", Map(x0_1).size())
 

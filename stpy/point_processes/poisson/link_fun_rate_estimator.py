@@ -62,7 +62,7 @@ class PermanentalProcessRateEstimator(PoissonRateEstimator):
                         @ self.packing.embed(x).view(1, -1)
                     ).view(-1)
                     integrand = lambda x, y: F(
-                        torch.Tensor([x, y]).view(1, 2).double()
+                        torch.tensor([x, y]).view(1, 2).double()
                     ).numpy()
 
                     val = quadvec2(
@@ -116,7 +116,7 @@ class PermanentalProcessRateEstimator(PoissonRateEstimator):
                                 * self.packing.embed(x).view(-1)[j]
                             )
                             integrand = lambda x, y: F_ij(
-                                torch.Tensor([x, y]).view(1, 2).double()
+                                torch.tensor([x, y]).view(1, 2).double()
                             ).numpy()
                             val, status = integrate.dblquad(
                                 integrand,
@@ -460,7 +460,7 @@ if __name__ == "__main__":
     hierarchical_structure = HierarchicalBorelSets(d=1, interval=(-1, 1), levels=levels)
     Sets = hierarchical_structure.get_all_sets()
 
-    D = BorelSet(1, bounds=torch.Tensor([[-1.0, 1.0]]).double())
+    D = BorelSet(1, bounds=torch.tensor([[-1.0, 1.0]]).double())
 
     m = 64
     embedding = HermiteEmbedding(m=m, d=1, gamma=gamma)

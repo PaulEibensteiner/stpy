@@ -53,8 +53,8 @@ F = lambda X: (np.cos(X * 10.0) + np.sin(X * 10.0)) * zeroing(X)
 # X = torch.rand(size = (N,d)).double()*0.25+0.5
 # y = F(X)
 #
-# Xpoint = torch.Tensor([[0.],[0.5]]).double()
-# ypoint = torch.Tensor([[0.],[0.]]).double()
+# Xpoint = torch.tensor([[0.],[0.5]]).double()
+# ypoint = torch.tensor([[0.],[0.]]).double()
 #
 # X = torch.vstack([X,Xpoint])
 # y = torch.vstack([y,ypoint])

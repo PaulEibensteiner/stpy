@@ -81,7 +81,7 @@ class Likelihood(ABC):
         :param params:
         :return:
         """
-        evidence = torch.Tensor(params["evidence"]).bool()
+        evidence = torch.tensor(params["evidence"]).bool()
         self.set_fn = lambda theta: [
             self.get_objective_cvxpy(mask=evidence)(theta) <= beta
         ]

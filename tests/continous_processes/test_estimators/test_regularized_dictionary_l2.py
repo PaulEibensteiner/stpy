@@ -82,7 +82,7 @@ styles = ["-", "--", "-", "--"]
 N = 1
 v = torch.randn(size=(m, 1)).double()
 F = lambda X: embedding.embed(X) @ v
-X = torch.Tensor([[0.5]]).double()
+X = torch.tensor([[0.5]]).double()
 y = F(X)
 xtest = interval_torch(n=n, d=1)
 

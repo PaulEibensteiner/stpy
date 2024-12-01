@@ -4,7 +4,7 @@ from doexpy.bandits.OPPR_TS_GP import OPPR_TS_GP
 
 
 def get_angle(R):
-    v = torch.Tensor([1.0, 1.0]).double()
+    v = torch.tensor([1.0, 1.0]).double()
     a1 = np.arccos((torch.dot(v, R @ v) / torch.dot(v, v)).numpy())
     a2 = np.arccos(-(torch.dot(v, R @ v) / torch.dot(v, v)).numpy())
     return np.min([a1, a2])
@@ -55,7 +55,7 @@ if __name__ == "__main__":
     embedding = HermiteEmbedding(gamma=gamma, m=m, d=d, diameter=1, approx="hermite")
     Map = lambda x: embedding.embed(x)
 
-    x0 = torch.Tensor([0.0, 0.0]).double().view(-1, d)
+    x0 = torch.tensor([0.0, 0.0]).double().view(-1, d)
     # 	Bandit = OPPR_TS_GP(x0, F, GP, Map, finite_dim=False, s = 10e-8)
     Bandit = OPPR_TS_GP(x0, F, GP, Map, finite_dim=True, s=s, GPMap=True)
 

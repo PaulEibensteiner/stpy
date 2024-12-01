@@ -489,14 +489,14 @@ class IntegralKernel:
     def pca(self, kernel, size=1):
         if size > self.n:
             size = self.n
-        GP = NystromFeatures(kernel, m=torch.Tensor([size]), s=self.s, approx="svd")
+        GP = NystromFeatures(kernel, m=torch.tensor([size]), s=self.s, approx="svd")
         GP.fit_gp(self.x, self.y)
         return GP.outer_kernel()
 
     def nystrom(self, kernel, size=1):
         if size > self.n:
             size = self.n
-        GP = NystromFeatures(kernel, m=torch.Tensor([size]), s=self.s, approx="uniform")
+        GP = NystromFeatures(kernel, m=torch.tensor([size]), s=self.s, approx="uniform")
         GP.fit_gp(self.x, self.y)
         return GP.outer_kernel()
 

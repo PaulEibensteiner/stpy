@@ -173,7 +173,7 @@ class QuadraticBenchmark(BenchmarkFunction):
             print("Quadratic Problem: Additive.")
 
     def eval_noiseless(self, X):
-        D = torch.diag(torch.Tensor([1.0, 2.0]).double())
+        D = torch.diag(torch.tensor([1.0, 2.0]).double())
         super().eval_noiseless(X)
         (n, d) = X.size()
         X = X @ self.R
@@ -201,7 +201,7 @@ class PolynomialBenchmark(BenchmarkFunction):
             print("Quadratic Problem: Additive.")
 
     def eval_noiseless(self, X):
-        D = torch.diag(torch.Tensor([1.0, 2.0]).double())
+        D = torch.diag(torch.tensor([1.0, 2.0]).double())
         super().eval_noiseless(X)
         (n, d) = X.size()
         X = X @ self.R
@@ -370,7 +370,7 @@ class GeneralizedAdditiveOverlap(BenchmarkFunction):
         # self.gamma = torch.min(kernel.gamma)
         # self.gamma = torch.zeros(1,1,dtype = torch.DoubleTensor)
         # self.gamma[0,0] =0.35
-        self.gamma = torch.Tensor([0.35]).double()
+        self.gamma = torch.tensor([0.35]).double()
         return self.gamma
 
 

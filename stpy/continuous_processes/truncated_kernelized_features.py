@@ -69,7 +69,7 @@ class TruncatedKernelizedFeatures(KernelizedFeatures):
         if self.x is not None:
             self.x = torch.cat((self.x, x), dim=0)
             self.y = torch.cat((self.y, y), dim=0)
-            new_alpha = torch.Tensor([self.alpha_score(self.x.size()[0])]).view(1, 1)
+            new_alpha = torch.tensor([self.alpha_score(self.x.size()[0])]).view(1, 1)
             self.alphas = torch.cat((self.alphas, new_alpha), dim=0)
         else:
             self.x = x

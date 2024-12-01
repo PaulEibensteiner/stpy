@@ -182,8 +182,8 @@ def randomly_split_set_without_duplicates_general(
 
     # randomly permute indices
     inde = torch.from_numpy(np.random.permutation(np.arange(0, n, 1)))
-    cumsum_indices = torch.cumsum(torch.Tensor(sizes), 0).int()
-    cumsum_indices = torch.cat((torch.Tensor([0]), cumsum_indices)).int()
+    cumsum_indices = torch.cumsum(torch.tensor(sizes), 0).int()
+    cumsum_indices = torch.cat((torch.tensor([0]), cumsum_indices)).int()
 
     masks = [torch.zeros(N).bool() for _ in sizes]
     for j in range(len(sizes)):
@@ -198,7 +198,7 @@ def randomly_split_set_without_duplicates_general(
 
 
 if __name__ == "__main__":
-    # x = torch.Tensor([[2, 1, 1], [2, 1, 1], [2, 2, 2],
+    # x = torch.tensor([[2, 1, 1], [2, 1, 1], [2, 2, 2],
     # 				  [3, 2, 2], [2, 1, 1], [4, 2, 1],
     # 				  [4, 2, 4], [4,4,4], [1,2,2]]).double()
     #

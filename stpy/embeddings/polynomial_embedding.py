@@ -85,7 +85,7 @@ class CustomEmbedding:
                 for i in range(self.m):
                     Fi = lambda x: self.embed(x).view(-1)[i]
                     integrand = lambda x, y: Fi(
-                        torch.Tensor([x, y]).view(1, 2).double()
+                        torch.tensor([x, y]).view(1, 2).double()
                     ).numpy()
                     val, status = integrate.dblquad(
                         integrand,

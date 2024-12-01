@@ -566,6 +566,6 @@ def get_indices(xtest, x):
 
 if __name__ == "__main__":
     x = torch.arange(0, 9, 1).reshape(3, 3)
-    xtrial = torch.Tensor([[0, 1, 2], [6, 7, 8], [3, 4, 5]])
+    xtrial = torch.tensor([[0, 1, 2], [6, 7, 8], [3, 4, 5]])
     print(x)
     print(get_indices(x, xtrial))

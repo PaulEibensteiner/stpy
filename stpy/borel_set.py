@@ -37,7 +37,7 @@ class BorelSet:
     def uniform_sample(self, n):
         sample = torch.zeros(n, self.d).double()
         for i in range(self.d):
-            sample_i = torch.from_numpy(
+            sample_i = torch.tensor(
                 np.random.uniform(self.bounds[i, 0], self.bounds[i, 1], n)
             )
             sample[:, i] = sample_i
@@ -55,20 +55,22 @@ class BorelSet:
 
         nodes = cartesian(nodes_arr)
         weights = cartesian(weights_arr)
-        return torch.prod(torch.from_numpy(weights), dim=1), torch.from_numpy(nodes)
+        return torch.prod(torch.tensor(weights), dim=1), torch.tensor(nodes)
 
     def return_discretization(self, n, offsets=None):
         dis = []
         for i in range(self.d):
             if offsets is None:
-                x = np.linspace(self.bounds[i, 0], self.bounds[i, 1], n)
+                x = np.linspace(self.bounds[i, 0].cpu(), self.bounds[i, 1].cpu(), n)
             else:
                 x = np.linspace(
-                    self.bounds[i, 0] - offsets[i], self.bounds[i, 1] + offsets[i], n
+                    self.bounds[i, 0].cpu() - offsets[i].cpu(),
+                    self.bounds[i, 1].cpu() + offsets[i].cpu(),
+                    n,
                 )
             dis.append(x)
         r = cartesian(dis)
-        r = torch.from_numpy(r)
+        r = torch.tensor(r)
         return r
 
     def inside(self, set):
@@ -122,7 +124,7 @@ class BallSet(BorelSet):
             x = np.linspace(self.center - self.radius, self.center + self.radius, n)
             dis.append(x)
             r = cartesian(dis)
-            r = torch.from_numpy(r)
+            r = torch.tensor(r)
             return r
 
         elif self.d == 2:
@@ -152,7 +154,7 @@ class BallSet(BorelSet):
         #
         # points = np.concatenate((points,self.center.view(-1,self.d).numpy()))
 
-        return torch.from_numpy(points)
+        return torch.tensor(points)
 
     def return_legendre_discretization(self, n):
         if self.d == 2:
@@ -167,7 +169,7 @@ class BallSet(BorelSet):
             points[:, 0] += float(self.center[0])
             points[:, 1] += float(self.center[1])
             weights = np.outer(w, np.sin(mu * np.pi / (n + 1)) ** 2).flatten() / (n + 1)
-            return torch.from_numpy(weights), torch.from_numpy(points)
+            return torch.tensor(weights), torch.tensor(points)
         else:
             raise AssertionError("Wrong type of set considered.")
 
@@ -222,9 +224,9 @@ class HierarchicalBorelSets:
 
     def __init__(self, d, interval, levels):
         if d == 1:
-            self.top_node = Node(d, torch.Tensor([interval]), None)
+            self.top_node = Node(d, torch.tensor([interval]), None)
         elif d == 2:
-            self.top_node = Node(d, torch.Tensor(interval), None)
+            self.top_node = Node(d, torch.tensor(interval), None)
 
         self.Sets = [self.top_node]
         self.levels = levels
@@ -265,8 +267,8 @@ class HierarchicalBorelSets:
             a, b = interval
             c = (a + b) / 2.0
 
-            S_1 = Node(1, torch.Tensor([[a, c]]), parent)
-            S_2 = Node(1, torch.Tensor([[c, b]]), parent)
+            S_1 = Node(1, torch.tensor([[a, c]]), parent)
+            S_2 = Node(1, torch.tensor([[c, b]]), parent)
 
             parent.left = S_1
             parent.right = S_2
@@ -289,10 +291,10 @@ class HierarchicalBorelSets:
             midx = xa + (xb - xa) / 2.0
             midy = ya + (yb - ya) / 2.0
 
-            S1 = Node(2, torch.Tensor([[xa, midx], [ya, midy]]), parent)
-            S2 = Node(2, torch.Tensor([[xa, midx], [midy, yb]]), parent)
-            S3 = Node(2, torch.Tensor([[midx, xb], [ya, midy]]), parent)
-            S4 = Node(2, torch.Tensor([[midx, xb], [midy, yb]]), parent)
+            S1 = Node(2, torch.tensor([[xa, midx], [ya, midy]]), parent)
+            S2 = Node(2, torch.tensor([[xa, midx], [midy, yb]]), parent)
+            S3 = Node(2, torch.tensor([[midx, xb], [ya, midy]]), parent)
+            S4 = Node(2, torch.tensor([[midx, xb], [midy, yb]]), parent)
 
             parent.children = [S1, S2, S3, S4]
 
@@ -304,7 +306,7 @@ class HierarchicalBorelSets:
 
 
 if __name__ == "__main__":
-    center = torch.Tensor([0.5, 0.5]).double()
+    center = torch.tensor([0.5, 0.5]).double()
     radius = 0.1
     d = 2
     B = BallSet(d, center, radius)

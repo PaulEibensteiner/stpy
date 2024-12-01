@@ -60,7 +60,7 @@ class PositiveEmbedding(Embedding):
         self.interval = (self.interval[0] - offset, self.interval[1] + offset)
 
         self.borel_set = BorelSet(
-            d=1, bounds=torch.Tensor([[self.interval[0], self.interval[1]]]).double()
+            d=1, bounds=torch.tensor([[self.interval[0], self.interval[1]]]).double()
         )
         self.mu = None
         self.precomp = False
@@ -84,9 +84,9 @@ class PositiveEmbedding(Embedding):
 
     def get_constraints(self):
         s = self.m**self.d
-        l = torch.from_numpy(np.full(s, self.b))
-        u = torch.from_numpy(np.full(s, self.B))
-        Lambda = torch.from_numpy(np.identity(s))
+        l = torch.tensor(np.full(s, self.b))
+        u = torch.tensor(np.full(s, self.B))
+        Lambda = torch.tensor(np.identity(s))
         return (l, Lambda, u)
 
     def cov(self, inverse=False):
@@ -104,20 +104,20 @@ class PositiveEmbedding(Embedding):
             if self.d == 1:
                 t = t.view(-1, 1).double()
             elif self.d == 2:
-                t = torch.from_numpy(cartesian([t.numpy(), t.numpy()])).double()
+                t = torch.tensor(cartesian([t.cpu().numpy(), t.cpu().numpy()])).double()
             elif self.d == 3:
-                t = torch.from_numpy(
-                    cartesian([t.numpy(), t.numpy(), t.numpy()])
+                t = torch.tensor(
+                    cartesian([t.cpu().numpy(), t.cpu().numpy(), t.cpu().numpy()])
                 ).double()
             if self.kernel is not None:
                 self.Gamma = self.kernel(t, t)
                 Z = self.embed_internal(t)
                 M = torch.pinverse(Z.T @ Z + (self.s) * torch.eye(self.Gamma.size()[0]))
-                self.M = torch.from_numpy(np.real(scipy.linalg.sqrtm(M.numpy())))
-                self.Gamma_half = torch.from_numpy(
+                self.M = torch.tensor(np.real(scipy.linalg.sqrtm(M.cpu().numpy())))
+                self.Gamma_half = torch.tensor(
                     np.real(
                         scipy.linalg.sqrtm(
-                            self.Gamma.numpy()
+                            self.Gamma.cpu().numpy()
                             + 1e-5 * (self.s**2) * np.eye(self.Gamma.size()[0])
                         )
                     )
@@ -156,8 +156,8 @@ class PositiveEmbedding(Embedding):
             out = []
             for i in range(n):
                 out.append(
-                    torch.from_numpy(
-                        np.kron(phi_1[i, :].numpy(), phi_2[i, :].numpy())
+                    torch.tensor(
+                        np.kron(phi_1[i, :].cpu().numpy(), phi_2[i, :].cpu().numpy()),
                     ).view(1, -1)
                 )
             out = torch.cat(out, dim=0)
@@ -180,10 +180,12 @@ class PositiveEmbedding(Embedding):
             out = []
             for i in range(n):
                 out.append(
-                    torch.from_numpy(
+                    torch.tensor(
                         np.kron(
                             phi_3[i, :],
-                            np.kron(phi_1[i, :].numpy(), phi_2[i, :].numpy()),
+                            np.kron(
+                                phi_1[i, :].cpu().numpy(), phi_2[i, :].cpu().numpy()
+                            ),
                         )
                     ).view(1, -1)
                 )
@@ -199,15 +201,16 @@ class PositiveEmbedding(Embedding):
         if already_embeded == False:
             Phi = self.embed(x).numpy()
         else:
-            Phi = x.numpy()
+            Phi = x.cpu().numpy()
 
         xi = cp.Variable(m)
         obj = cp.Minimize(
-            self.s**2 * cp.norm2(xi) + cp.sum_squares(Phi @ xi - y.numpy().reshape(-1))
+            self.s**2 * cp.norm2(xi)
+            + cp.sum_squares(Phi @ xi - y.cpu().numpy().reshape(-1))
         )
 
         constraints = []
-        Lambda = Lambda @ Gamma_half.numpy()
+        Lambda = Lambda @ Gamma_half.cpu().numpy()
         if not np.all(l == -np.inf):
             constraints.append(Lambda[l != -np.inf] @ xi >= l[l != -np.inf])
         if not np.all(u == np.inf):
@@ -225,7 +228,7 @@ class PositiveEmbedding(Embedding):
             raise ValueError("cannot compute the mode")
 
         mode = xi.value
-        self.mode = torch.from_numpy(mode).view(-1, 1)
+        self.mode = torch.tensor(mode).view(-1, 1)
         self.mu = self.mode
         return mode
 

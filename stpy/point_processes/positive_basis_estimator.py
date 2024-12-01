@@ -36,7 +36,7 @@ class RateEstimator:
 
             for sample in data:
                 S, obs, dt = sample
-                count = torch.Tensor([0])
+                count = torch.tensor([0])
 
                 if obs is not None:
                     if times == True:
@@ -46,7 +46,7 @@ class RateEstimator:
 
                     phi = self.packing.integral(S) * dt
                     observations.append(emb)
-                    count = torch.Tensor([emb.size()[0]])
+                    count = torch.tensor([emb.size()[0]])
                     phis.append(phi.view(1, -1))
 
                     if self.dual == True:
@@ -95,7 +95,7 @@ class RateEstimator:
 
             phi = self.packing.integral(S).view(1, -1) * dt
 
-            count = torch.Tensor([emb.size()[0]])
+            count = torch.tensor([emb.size()[0]])
 
             if self.observations is not None:
                 self.observations = torch.cat((self.observations, emb), dim=0)
@@ -111,7 +111,7 @@ class RateEstimator:
                     index = torch.argmin(dist_matrix[k, :])
                     self.anchor_weights[index] += 1.0
         else:
-            count = torch.Tensor([0])
+            count = torch.tensor([0])
             phi = self.packing.integral(S).view(1, -1) * dt
 
         self.phis = torch.cat((self.phis, phi), dim=0)

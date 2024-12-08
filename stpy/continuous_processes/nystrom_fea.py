@@ -1,10 +1,11 @@
 import matplotlib.pyplot as plt
-from scipy.interpolate import LinearNDInterpolator
+from scipy.interpolate import LinearNDInterpolator, NearestNDInterpolator
 from scipy.interpolate import interp1d
 
 from stpy.continuous_processes.gauss_procc import GaussianProcess
 from stpy.embeddings.embedding import *
 from stpy.helpers.helper import *
+from stpy.helpers.posterior_sampling import tmg
 from stpy.kernels import KernelFunction
 
 
@@ -13,7 +14,13 @@ class NystromFeatures(Embedding):
     Nystrom Features for Gaussian Kernel
     """
 
-    def __init__(self, kernel_object, m=100, approx="uniform", s=1.0, samples=100):
+    def __init__(
+        self, kernel_object, m=100, approx="uniform", s=1.0, samples=100, fast=True
+    ):
+        """
+        fast, optional
+            If it is true, the samples from the truncated Gaussian are approximated by squared samples of a Gaussian, by default True
+        """
 
         self.fit = False
         self.m = m
@@ -26,6 +33,7 @@ class NystromFeatures(Embedding):
         self.kernel = kernel_object.kernel
         self.approx = approx
         self.s = s
+        self.fast = fast
 
     def description(self):
         """
@@ -145,9 +153,25 @@ class NystromFeatures(Embedding):
         elif self.approx == "positive_svd":
             from sklearn.decomposition import NMF
 
-            GP = GaussianProcess(kernel=self.kernel_object)
-            ysample = GP.sample(x, size=self.samples) ** 2
-            X = ysample
+            if self.fast:
+                GP = GaussianProcess(kernel=self.kernel_object)
+                ysample = GP.sample(x, size=self.samples) ** 2
+                X = ysample
+            else:
+                burn_in = 30
+                ysample = tmg(
+                    self.samples,
+                    np.zeros(len(x)),
+                    self.kernel_object.kernel(x, x).cpu().numpy()
+                    + 1e-7 * np.eye(len(x)),
+                    torch.ones(len(x)).cpu().numpy(),
+                    np.eye(len(x)),
+                    np.zeros(len(x)),
+                    burn_in,
+                    True,
+                )
+                X = torch.tensor(ysample.T)
+
             model = NMF(n_components=self.ms, max_iter=8000, tol=1e-12)
             W = torch.tensor(model.fit_transform(X.cpu()))
             H = torch.tensor(model.components_)
@@ -169,19 +193,42 @@ class NystromFeatures(Embedding):
                 )
 
             elif x.size()[1] == 2:
+
                 fs = []
                 for j in range(self.ms):
+                    # each column of W is one \phi_i that is normalized to \|phi_i\|_2=1
                     W_j = (W.T @ torch.diag(l))[j, :].cpu().numpy()
-                    fs.append(LinearNDInterpolator(x.cpu().numpy(), W_j))
-                self.embed = lambda q: torch.cat(
-                    [
-                        torch.tensor(
-                            fs[j](q[:, 0].cpu().numpy(), q[:, 1].cpu().numpy())
-                        ).view(-1, 1)
-                        for j in range(self.ms)
-                    ],
-                    dim=1,
-                )
+                    fs.append(
+                        (
+                            LinearNDInterpolator(x.cpu().numpy(), W_j),
+                            NearestNDInterpolator(x.cpu().numpy(), W_j),
+                        )
+                    )
+
+                def embed(q):
+                    out_list = []
+                    # Interpolate for points inside convex set else Nearest Neighbor
+                    for j in range(self.ms):
+                        cur = fs[j][0](q[:, 0].cpu().numpy(), q[:, 1].cpu().numpy())
+                        mask = np.isnan(cur)
+                        cur[mask] = fs[j][1](
+                            q[:, 0].cpu().numpy()[mask], q[:, 1].cpu().numpy()[mask]
+                        )
+                        out_list.append(torch.tensor(cur).view(-1, 1))
+                    return torch.cat(out_list, dim=1)
+
+                self.embed = embed
+
+                # self.embed = lambda q: torch.cat(
+                #     [
+                #         torch.tensor(
+                #             fs[j](q[:, 0].cpu().numpy(), q[:, 1].cpu().numpy())
+                #         ).view(-1, 1)
+                #         for j in range(self.ms)
+                #     ],
+                #     dim=1,
+                # )
+
             # elif x.size()[1] == 2:
             # 	fs = []
             # 	for j in range(self.ms):

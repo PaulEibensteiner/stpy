@@ -1,4 +1,5 @@
 import pickle
+from typing import Optional
 
 import numpy as np
 import scipy
@@ -13,18 +14,32 @@ from stpy.kernels import KernelFunction
 class OptimalPositiveBasis(PositiveEmbedding):
 
     def __init__(
-        self, *args, samples=300, discretization_size=30, saved=False, **kwargs
+        self,
+        *args,
+        samples=300,
+        discretization_size=30,
+        saved=False,
+        roi: torch.Tensor | BorelSet | None = None,
+        **kwargs
     ):
+        # roi is the set of points that the basis is optimal for if it is a tensor
+        # else it is the region that the basis if optimal for that will be discretized
+        # by discretization_size. If it is not given the entire domain will be used.
         super().__init__(*args, **kwargs)
         self.samples = np.maximum(samples, self.m)
 
-        B = BorelSet(
-            self.d,
-            torch.tensor(
-                [[self.interval[0], self.interval[1]] for _ in range(self.d)]
-            ).double(),
-        )
-        self.discretized_domain = B.return_discretization(discretization_size)
+        if roi is None:
+            B = BorelSet(
+                self.d,
+                torch.tensor(
+                    [[self.interval[0], self.interval[1]] for _ in range(self.d)]
+                ).double(),
+            )
+            self.discretized_domain = B.return_discretization(discretization_size)
+        elif isinstance(roi, BorelSet):
+            self.discretized_domain = roi.return_discretization(discretization_size)
+        else:
+            self.discretized_domain = roi
 
         y = self.discretized_domain[:, 0].view(-1, 1) * 0
 

@@ -4,7 +4,7 @@ import cvxpy as cp
 import mosek
 import numpy as np
 import scipy
-from stpy.borel_set import HierarchicalBorelSets
+from stpy.borel_set import BorelSet, HierarchicalBorelSets
 from stpy.embeddings.embedding import Embedding
 from stpy.kernels import KernelFunction
 import torch
@@ -59,6 +59,8 @@ class PoissonRateEstimator(RateEstimator):
         no_anchor_points=1024,
         U=1.0,
         optimization_library="torch",
+        roi: torch.Tensor | BorelSet | None = None,
+        roi_discretization: int = 30,
     ):
         self.d = d
         """ Dimension of the data """
@@ -160,6 +162,8 @@ class PoissonRateEstimator(RateEstimator):
                 offset=offset,
                 s=np.sqrt(jitter),
                 samples=samples_nystrom,
+                roi=roi,
+                discretization_size=roi_discretization,
             )
         elif basis == "custom":
             assert embedding is not None

@@ -15,7 +15,7 @@ class NystromFeatures(Embedding):
     """
 
     def __init__(
-        self, kernel_object, m=100, approx="uniform", s=1.0, samples=100, fast=True
+        self, kernel_object, m=100, approx="uniform", s=1.0, samples=100, fast=False
     ):
         """
         fast, optional
@@ -175,8 +175,7 @@ class NystromFeatures(Embedding):
             model = NMF(n_components=self.ms, max_iter=8000, tol=1e-12)
             W = torch.tensor(model.fit_transform(X.cpu()))
             H = torch.tensor(model.components_)
-            l = torch.norm(W, dim=1)
-            l = 1.0 / l
+            W_norm = W / torch.linalg.norm(W, dim=0)
 
             if x.size()[1] == 1:
                 fs = []
@@ -184,7 +183,7 @@ class NystromFeatures(Embedding):
                     fs.append(
                         interp1d(
                             x.view(-1).cpu().numpy(),
-                            (W.T @ torch.diag(l))[j, :].cpu().numpy(),
+                            W_norm[:, j].cpu().numpy(),
                         )
                     )
                 self.embed = lambda q: torch.cat(
@@ -197,7 +196,7 @@ class NystromFeatures(Embedding):
                 fs = []
                 for j in range(self.ms):
                     # each column of W is one \phi_i that is normalized to \|phi_i\|_2=1
-                    W_j = (W.T @ torch.diag(l))[j, :].cpu().numpy()
+                    W_j = W_norm[:, j].cpu().numpy()
                     fs.append(
                         (
                             LinearNDInterpolator(x.cpu().numpy(), W_j),

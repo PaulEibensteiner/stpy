@@ -7,25 +7,32 @@ from torch import Tensor
 from torch_cluster import grid_cluster
 
 
-def _calculate_voxel_size(x: Tensor, n_voxels: int) -> float:
-    data_range = x.max(dim=0).values - x.min(dim=0).values
-    total_volume = torch.prod(data_range)
-    voxel_volume = total_volume / n_voxels
-    voxel_size = voxel_volume ** (1 / x.shape[1])
-    return voxel_size.item()
+def _get_n_voxels(x, size: float):
+    size = torch.full([x.shape[1]], size)
+    indices = grid_cluster(x, size)
+    return indices.unique().numel()
 
 
 def voxel_grid(
     x: Tensor,
     size: Union[float, Tensor, None] = None,
-    approx_n_voxels: int | None = None,
+    max_n_voxels: int | None = None,
 ) -> Tensor:
-    # approx_n_voxels is only correct if the input domain is a (hyper) cube
-    # in every other case the result will either be more or less
 
+    # Do binary search to find the right voxel size that yields <= max_n_voxels
     if size is None:
-        assert approx_n_voxels is not None, "One of size, n_voxels must be given"
-        size = _calculate_voxel_size(x, approx_n_voxels)
+        assert max_n_voxels is not None, "One of size, n_voxels must be given"
+        max_size = (x.max(dim=0).values - x.min(dim=0).values).max().item()
+        tol = max_size / 1e7
+        low, high = 0, max_size
+        while high - low > tol:
+            mid = (low + high) / 2
+            n_voxels = _get_n_voxels(x, mid)
+            if n_voxels > max_n_voxels:
+                low = mid
+            else:
+                high = mid
+        size = high
 
     if isinstance(size, float):
         size = torch.full([x.shape[1]], size)
@@ -52,5 +59,5 @@ if __name__ == "__main__":
     )
     size = 1.0
 
-    result = voxel_grid(x, approx_n_voxels=3)
+    result = voxel_grid(x, max_n_voxels=3)
     print(result)

@@ -23,7 +23,7 @@ class OptimalPositiveBasis(PositiveEmbedding):
         samples=300,
         discretization_size=30,
         data: torch.Tensor | BorelSet,
-        fast_sampling=False,  # samples using squared gaussian instead of truncated gausian
+        fast_sampling=True,  # samples using squared gaussian instead of truncated gausian
         memory_limit=5,  # Limits the amount of points used for optimal basis construction
         sample_algorithm: Literal[
             "grid", "kmeans"
@@ -232,7 +232,7 @@ class OptimalPositiveBasis(PositiveEmbedding):
 
         if len(x) > n_clusters:
             if self.sample_algorithm == "grid":
-                centroids = voxel_grid(x, approx_n_voxels=n_clusters)
+                centroids = voxel_grid(x, max_n_voxels=n_clusters)
                 print(
                     f"Approximated data set with {len(centroids)} points for optimal"
                     " basis."
@@ -279,6 +279,7 @@ class OptimalPositiveBasis(PositiveEmbedding):
 
                 return centroids
         else:
+            print("No subsampling necessary because data fits into memory")
             return x
 
     def _fit_data(self, data):

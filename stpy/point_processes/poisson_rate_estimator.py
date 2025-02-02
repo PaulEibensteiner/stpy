@@ -61,6 +61,7 @@ class PoissonRateEstimator(RateEstimator):
         optimization_library="torch",
         roi: torch.Tensor | BorelSet | None = None,
         roi_discretization: int = 30,
+        memory_limit=None,
     ):
         self.d = d
         """ Dimension of the data """
@@ -162,8 +163,9 @@ class PoissonRateEstimator(RateEstimator):
                 offset=offset,
                 s=np.sqrt(jitter),
                 samples=samples_nystrom,
-                roi=roi,
+                data=roi,
                 discretization_size=roi_discretization,
+                memory_limit=memory_limit,
             )
         elif basis == "custom":
             assert embedding is not None
@@ -231,8 +233,7 @@ class PoissonRateEstimator(RateEstimator):
         where data_points is a 2d tensor, with number of columns equal to d
         and number of rows equal to the number of point observations
 
-        It triggers a re-fitting of the approximation parameters $\hat \theta$
-        and adds
+        It adds
 
         - the integral over the sensing area plus the log of the integral over the sensing area if the data is of type histogram
         - the integral over the sensing are plus the sum of the rate function at the datapoints if the data is of type count-record
@@ -1467,7 +1468,11 @@ class PoissonRateEstimator(RateEstimator):
         prob = cp.Problem(objective, constraints)
 
         if self.rate is not None:
-            theta.value = self.rate.cpu().numpy()
+            theta.value = (
+                torch.cat([self.rate, torch.zeros([self.get_m() - len(self.rate)])])
+                .cpu()
+                .numpy()
+            )
 
         try:
             prob.solve(

@@ -1,14 +1,18 @@
-import pickle
-from typing import Optional
+from typing import Literal
 
 import numpy as np
 import scipy
+from stpy.helpers.voxel_grid import voxel_grid
+from stpy.helpers.parallel_interpolation import InterpolatorArray
 import torch
 
 from stpy.borel_set import BorelSet
-from stpy.continuous_processes.nystrom_fea import NystromFeatures
 from stpy.embeddings.positive_embedding import PositiveEmbedding
 from stpy.kernels import KernelFunction
+from sklearn.decomposition import NMF
+from nmf import run_nmf
+from stpy.helpers.posterior_sampling import tmg
+from fast_pytorch_kmeans import KMeans
 
 
 class OptimalPositiveBasis(PositiveEmbedding):
@@ -18,17 +22,25 @@ class OptimalPositiveBasis(PositiveEmbedding):
         *args,
         samples=300,
         discretization_size=30,
-        saved=False,
-        roi: torch.Tensor | BorelSet | None = None,
-        **kwargs
+        data: torch.Tensor | BorelSet,
+        fast_sampling=False,  # samples using squared gaussian instead of truncated gausian
+        memory_limit=5,  # Limits the amount of points used for optimal basis construction
+        sample_algorithm: Literal[
+            "grid", "kmeans"
+        ] = "grid",  # How to subsample if points are limited
+        **kwargs,
     ):
         # roi is the set of points that the basis is optimal for if it is a tensor
         # else it is the region that the basis if optimal for that will be discretized
         # by discretization_size. If it is not given the entire domain will be used.
         super().__init__(*args, **kwargs)
-        self.samples = np.maximum(samples, self.m)
+        self.sample_algorithm = sample_algorithm
+        self.num_samples = np.maximum(samples, self.m)
+        self.fast = fast_sampling
+        self.memory_limit = memory_limit if memory_limit is not None else 40
+        self.interpolators = None
 
-        if roi is None:
+        if data is None:
             B = BorelSet(
                 self.d,
                 torch.tensor(
@@ -36,10 +48,10 @@ class OptimalPositiveBasis(PositiveEmbedding):
                 ).double(),
             )
             self.discretized_domain = B.return_discretization(discretization_size)
-        elif isinstance(roi, BorelSet):
-            self.discretized_domain = roi.return_discretization(discretization_size)
+        elif isinstance(data, BorelSet):
+            self.discretized_domain = data.return_discretization(discretization_size)
         else:
-            self.discretized_domain = roi
+            self.discretized_domain = data
 
         y = self.discretized_domain[:, 0].view(-1, 1) * 0
 
@@ -49,43 +61,26 @@ class OptimalPositiveBasis(PositiveEmbedding):
         # 										gamma = self.kernel_object.gamma, d = self.kernel_object.d)
 
         self.new_kernel_object = self.kernel_object
-        if saved == True:
-            print("Did not load GP object, it needs to loaded")
-        else:
-            self.GP = NystromFeatures(
-                self.new_kernel_object,
-                m=self.m,
-                approx="positive_svd",
-                samples=self.samples,
+        self._fit_data(data=data)
+        print("Optimal basis constructed.")
+        if torch.sum(torch.isnan(self.embed_internal(self.discretized_domain))) > 0:
+            print(
+                "Failed basis? (zero is good):",
+                torch.sum(torch.isnan(self.embed_internal(self.discretized_domain))),
             )
-            self.GP.fit_gp(self.discretized_domain, y)
-            print("Optimal basis constructed.")
-            if torch.sum(torch.isnan(self.GP.embed(self.discretized_domain))) > 0:
-                print(
-                    "Failed basis? (zero is good):",
-                    torch.sum(torch.isnan(self.GP.embed(self.discretized_domain))),
-                )
         self.precomp_integral = {}
 
     def get_m(self):
         return self.m
 
-    def basis_fun(self, x, j):
-        return self.GP.embed(x)[:, j].view(-1, 1)
-
     def embed_internal(self, x):
-        out = torch.zeros(size=(x.size()[0], self.m), dtype=torch.float64)
+        out = torch.zeros([len(x), self.m], dtype=torch.float64)
         for j in range(self.m):
             out[:, j] = self.basis_fun(x, j).view(-1)
         return out
 
-    def save_embedding(self, filename):
-        filehandler = open(filename, "w")
-        pickle.dump(self.GP, filehandler)
-
-    def load_embedding(self, filename):
-        file_pi2 = open(filename, "r")
-        self.GP = pickle.load(file_pi2)
+    def basis_fun(self, x, j):
+        raise Exception("Fit on data before using")
 
     def get_constraints(self):
         s = self.get_m()
@@ -102,7 +97,7 @@ class OptimalPositiveBasis(PositiveEmbedding):
         else:
             if S.d == 1:
                 weights, nodes = S.return_legendre_discretization(n=256)
-                psi = torch.sum(torch.diag(weights) @ self.GP.embed(nodes), dim=0)
+                psi = torch.sum(torch.diag(weights) @ self.embed_internal(nodes), dim=0)
                 Gamma_half = self.cov()
                 psi = Gamma_half.T @ psi
                 self.precomp_integral[S] = psi
@@ -125,7 +120,7 @@ class OptimalPositiveBasis(PositiveEmbedding):
         if self.precomp == False:
 
             x = self.discretized_domain
-            vals = self.GP.embed(x)
+            vals = self.embed_internal(x)
             indices = torch.argmax(
                 vals, dim=0
             )  # the nodes are the maxima of the bump functions
@@ -157,6 +152,217 @@ class OptimalPositiveBasis(PositiveEmbedding):
         else:
             return self.Gamma_half
 
+    def _sample_gaussian_prior(self, x: torch.Tensor):
+        n = self.num_samples
+        dim = len(x)
+        Cov = self.kernel_object.kernel(x, x) + 10e-7 * torch.eye(
+            dim, dtype=torch.float64
+        )
+        L = torch.linalg.cholesky(Cov)
+        if self.fast:
+            random_vector = torch.normal(
+                mean=torch.zeros(dim, n, dtype=torch.float64), std=1.0
+            )
+            y = torch.mm(L, random_vector) ** 2
+        else:
+            y = torch.tensor(
+                tmg(
+                    n,
+                    np.zeros([dim], dtype=np.float64),
+                    Cov.cpu().numpy(),
+                    np.ones([dim], dtype=np.float64),
+                    np.eye(dim, dtype=np.float64),
+                    np.zeros(dim, dtype=np.float64),
+                    verbose=True,
+                ),
+                dtype=torch.float64,
+            )
+        return y, L
+
+    def _sample_gaussian_conditional(self, x_old, L_old, y_old, x):
+        dim = len(x)  # dimensionality of input
+        n = y_old.size(1)  # number of samples
+
+        K_new_new = self.kernel_object.kernel(x, x) + 1e-7 * torch.eye(
+            dim, dtype=torch.float64
+        )
+        K_new_old = self.kernel_object.kernel(x_old, x)
+
+        alpha = torch.linalg.solve_triangular(L_old, y_old, upper=False)
+        alpha = torch.linalg.solve_triangular(L_old.T, alpha, upper=True)
+
+        mu_star = K_new_old @ alpha  # shape (dim, n)
+        # TODO check if kernel is always symmetric
+        K_old_new = K_new_old.T  # shape (dim_old, dim)
+
+        tmp = torch.linalg.solve_triangular(L_old, K_old_new, upper=False)
+        tmp2 = torch.linalg.solve_triangular(L_old.T, tmp, upper=True)
+
+        Sigma_star = (
+            K_new_new - (K_new_old @ tmp2) + 1e-7 * torch.eye(dim, dtype=torch.float64)
+        )
+
+        L_star = torch.linalg.cholesky(Sigma_star)
+        if self.fast:
+            random_vector_new = torch.normal(
+                mean=torch.zeros(dim, n, dtype=torch.float64), std=1.0
+            )
+            y_new = (mu_star + L_star @ random_vector_new) ** 2
+        else:
+            y_new = torch.tensor(
+                tmg(
+                    n,
+                    mu_star.cpu().numpy(),
+                    Sigma_star.cpu().numpy(),
+                    np.ones([dim], dtype=np.float64),
+                    np.eye(dim, dtype=np.float64),
+                    np.zeros(dim, dtype=np.float64),
+                    verbose=True,
+                ),
+                dtype=torch.float64,
+            )
+
+        return y_new
+
+    def _subsample_if_necessary(self, x: torch.Tensor):
+        # Calculate number of clusters
+        n_clusters = (self.memory_limit * 1_000_000_000) / x.element_size()
+        # Since we want to calculate the cholesky decomp of the cov matrix of the data plus roi (expected to be 1% of data)
+        n_clusters = int(np.sqrt(n_clusters) * 0.99 / 2.0)
+
+        if len(x) > n_clusters:
+            if self.sample_algorithm == "grid":
+                centroids = voxel_grid(x, approx_n_voxels=n_clusters)
+                print(
+                    f"Approximated data set with {len(centroids)} points for optimal"
+                    " basis."
+                )
+                return centroids
+            elif self.sample_algorithm == "kmeans":
+                # Calculate maximum size of mini batch
+                n_samples, n_features = x.shape
+                SAFETY_FACTOR = 1.5
+                max_batch_size = int(
+                    (
+                        self.memory_limit * 1_000_000_000
+                        - 0.8 * n_samples
+                        - 2 * n_clusters * n_features * x.element_size()
+                    )
+                    // (
+                        (
+                            n_features * n_clusters * x.element_size()
+                            + n_features * x.element_size()
+                        )
+                        * SAFETY_FACTOR
+                    )
+                )
+                if max_batch_size >= n_samples:
+                    max_batch_size = None
+
+                print(
+                    f"Approximating data set with {n_clusters} points from"
+                    f" {len(x)} points for optimal basis."
+                    + (
+                        f"Using batch size {max_batch_size}"
+                        if max_batch_size is not None
+                        else ""
+                    )
+                )
+                kmeans = KMeans(
+                    n_clusters=n_clusters,
+                    mode="euclidean",
+                    verbose=1,
+                    minibatch=max_batch_size,
+                )
+                kmeans.fit_predict(x)
+                centroids = kmeans.centroids
+
+                return centroids
+        else:
+            return x
+
+    def _fit_data(self, data):
+        self.data_m = self.m
+        data = self._subsample_if_necessary(data)
+        self.F_data, self.L_data = self._sample_gaussian_prior(data)
+        self.F_data = self.F_data**2
+        self.W_data, self.H_data, err = run_nmf(
+            self.F_data,
+            n_components=self.m,
+            tol=1e-12,
+            use_gpu=True,
+            batch_max_iter=2000,
+            fp_precision=self.F_data.dtype,
+        )
+        self.W_data = torch.tensor(self.W_data)
+        self.H_data = torch.tensor(self.H_data)
+        self.W_data = self.W_data / torch.linalg.norm(self.W_data, dim=0)
+        self.data = data
+        W_norm = self.W_data
+        self._set_interpolators(data, W_norm)
+
+    def basis_fun(self, q: torch.Tensor, j: int):
+        if self.interpolators is None:
+            raise Exception("Fit on data before using")
+
+        return self.interpolators(j, q)
+
+    def _set_interpolators(self, x: torch.Tensor, phi: torch.Tensor):
+        assert x.dtype == phi.dtype
+        self.interpolators = InterpolatorArray(x, phi, self.m)
+
+    def fit(self, roi: torch.Tensor):
+        assert self.data is not None, "Data must be given first"
+        print("Refitting optimal basis")
+        self.precomp = False
+        x = torch.cat((self.data, roi), dim=0)
+        F, _ = self._sample_gaussian_prior(x)
+        F = F**2
+        # Note: using cpu based NMF here since run_nmf has no way to pass initialization
+        model = NMF(n_components=self.data_m, max_iter=200, tol=1e-8, init="custom")
+        phi_roi_init = torch.zeros([len(roi), self.data_m], dtype=torch.float64)
+        W_start = torch.cat((self.W_data, phi_roi_init), dim=0)
+        W = torch.tensor(
+            model.fit_transform(
+                F.cpu().numpy(),
+                W=W_start.cpu().numpy(),
+                H=self.H_data.cpu().numpy(),
+            )
+        )
+        self.Phi = W / torch.linalg.norm(W, dim=0)
+        self.m = self.data_m
+        self._set_interpolators(x, self.Phi)
+        self.precomp = False
+        self.precomp_integral = {}
+
+    def add_new_functions(self, roi: torch.Tensor, n: int):
+        x = torch.cat((self.data, roi), dim=0)
+        F_new = self._sample_gaussian_conditional(
+            self.data, self.L_data, self.F_data, roi
+        )
+        F = torch.cat([self.F_data, F_new])
+        Phi_old = (
+            torch.stack([self.basis_fun(x, j) for j in range(self.data_m)]).squeeze(2).T
+        )
+        Theta_old = self.H_data
+        # TODO, theoretically this is wrong and we would have to solve over both Phi_old and Phi_new
+        # also, caping at 0 has no theoretical underpinning
+        objective = torch.clamp(F - Phi_old @ Theta_old, min=0)
+        Phi_new, Theta_new, err = run_nmf(
+            objective,
+            n_components=n,
+            tol=1e-8,
+            use_gpu=True,
+            batch_max_iter=600,
+            fp_precision=objective.dtype,
+        )
+        Phi_new = torch.tensor(Phi_new)
+        self.Phi = Phi_new / torch.linalg.norm(Phi_new, dim=0)
+        self.m = self.data_m + n
+        self.interpolators.add(x, self.Phi, n)
+        self.precomp = False
+        self.precomp_integral = {}
+
 
 if __name__ == "__main__":
 
@@ -166,65 +372,58 @@ if __name__ == "__main__":
     from scipy.interpolate import griddata
 
     d = 2
-    m = 64
+    m = 5
     n = 64
-    N = 20
-    sqrtbeta = 2
     s = 0.01
     b = 0
     gamma = 0.5
     k = KernelFunction(gamma=gamma, d=2)
 
-    Emb = OptimalPositiveBasis(
-        d, m, offset=0.2, s=s, b=b, discretization_size=n, B=1000.0, kernel_object=k
-    )
-
-    GP = GaussianProcess(d=d, s=s)
     xtest = torch.tensor(interval(n, d))
 
-    x = torch.tensor(np.random.uniform(-1, 1, size=(N, d)))
+    xnew = xtest[:1000]
 
-    F_true = lambda x: torch.sum(torch.sin(x) ** 2 - 0.1, dim=1).view(-1, 1)
-    F = lambda x: F_true(x) + s * torch.randn(x.size()[0]).view(-1, 1).double()
-    y = F(x)
+    xtest = xtest[1000:]
 
-    # Try to plot the basis functions
-    msqrt = int(np.sqrt(m))
-    fig, axs = plt.subplots(msqrt, msqrt, figsize=(15, 7))
-    for i in range(m):
-        f_i = Emb.basis_fun(xtest, i)  ## basis function
-        xx = xtest[:, 0].cpu().numpy()
-        yy = xtest[:, 1].cpu().numpy()
-        ax = axs[int(i // msqrt), (i % msqrt)]
-        grid_x, grid_y = np.mgrid[min(xx) : max(xx) : 100j, min(yy) : max(yy) : 100j]
-        grid_z_f = griddata(
-            (xx, yy), f_i[:, 0].detach().numpy(), (grid_x, grid_y), method="linear"
-        )
-        cs = ax.contourf(grid_x, grid_y, grid_z_f, levels=10)
-        ax.contour(cs, colors="k")
-        # cbar = fig.colorbar(cs)
-        # if self.x is not None:
-        # 	ax.scatter(self.x[:, 0].detach().numpy(), self.x[:, 1].detach().numpy(), c='r', s=100, marker="o")
-        ax.grid(c="k", ls="-", alpha=0.1)
-
-    plt.savefig("positive.png")
-    plt.show()
-
-    Emb.fit(x, y)
-    GP.fit_gp(x, y)
-
-    mu, _ = Emb.mean_std(xtest)
-    mu_true, _ = GP.mean_std(xtest)
-
-    Emb.visualize_function(
-        xtest, [F_true, lambda x: GP.mean_std(x)[0], lambda x: Emb.mean_std(x)[0]]
+    Emb = OptimalPositiveBasis(
+        d,
+        m,
+        offset=0.2,
+        s=s,
+        b=b,
+        discretization_size=n,
+        B=1000.0,
+        kernel_object=k,
+        data=xtest,
     )
-    # Emb.visualize_function(xtest,GP.mean_std)
-    # Emb.visualize_function(xtest,Emb.mean_std)
 
-    # plt.plot(xtest,mu_true,'b--', label = 'GP')
+    y, L = Emb._sample_prior(xtest, 1)
 
-    # plt.plot(x,y,'ro')
-    # plt.plot(xtest, mu, 'g-', label = 'positive basis ')
-    # plt.legend()
+    fig, ax = plt.subplots(figsize=(10, 6))
+    xx = xtest[:, 0].cpu().numpy()
+    yy = xtest[:, 1].cpu().numpy()
+    sc = ax.scatter(xx, yy, c=y.detach().numpy().reshape(-1), cmap="viridis")
+    ax.grid(c="k", ls="-", alpha=0.1)
+    plt.colorbar(sc)
+    plt.title("Interpolated plot of y over xtest")
+    plt.xlabel("x1")
+    plt.ylabel("x2")
     plt.show()
+
+    ynew = Emb._sample_conditional(xtest, L, y, xnew)
+
+    xtest = torch.cat([xtest, xnew])
+    y = torch.cat([y, ynew])
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+    xx = xtest[:, 0].cpu().numpy()
+    yy = xtest[:, 1].cpu().numpy()
+    sc = ax.scatter(xx, yy, c=y.detach().numpy().reshape(-1), cmap="viridis")
+    ax.grid(c="k", ls="-", alpha=0.1)
+    plt.colorbar(sc)
+    plt.title("Interpolated plot of y over xtest")
+    plt.xlabel("x1")
+    plt.ylabel("x2")
+    plt.show()
+
+    print("hi")

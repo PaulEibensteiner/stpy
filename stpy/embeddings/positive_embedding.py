@@ -64,7 +64,7 @@ class PositiveEmbedding(Embedding):
         )
         self.mu = None
         self.precomp = False
-        self.procomp_integrals = {}
+        self.precomp_integral = {}
 
     def get_size(self):
         return self.m**self.d

@@ -14,6 +14,10 @@ packages = [
     "quadprog",
     "cvxpylayers",
     "autograd_minimize",
+    "torch-cluster",
+    "nmf-torch",
+    "fast-pytorch-kmeans",
+    "tqdm",
 ]
 #
 setup(
@@ -27,4 +31,5 @@ setup(
     packages=["stpy"],
     zip_safe=False,
     install_requires=packages,
+    setup_requires=["torch", "Cython"],
 )

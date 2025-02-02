@@ -1,7 +1,5 @@
-from typing import overload
-from torch.multiprocessing import Pool, set_start_method
+from torch.multiprocessing import Pool
 from os import cpu_count
-import line_profiler
 import torch
 import numpy as np
 from scipy.spatial import Delaunay, cKDTree
@@ -181,16 +179,18 @@ class InterpolatorND:
             simplices_list.append(simplices)
 
         exact_matches_idx = np.concatenate(exact_matches_idx_list)
-        exact_matches_idx = torch.tensor(exact_matches_idx)
+        exact_matches_idx = torch.tensor(exact_matches_idx, device=self.y.device)
         exact_matches_y = self.y[exact_matches_idx]
         if len(exact_matches_y) == len(xp):
             return exact_matches_y
 
         exact_match_mask = np.concatenate(exact_match_mask_list)
-        exact_match_mask = torch.tensor(exact_match_mask)
+        exact_match_mask = torch.tensor(exact_match_mask, device=self.y.device)
 
         simplices_remaining = np.concatenate(simplices_list)
-        simplices_remaining = torch.tensor(simplices_remaining)  # (B,)
+        simplices_remaining = torch.tensor(
+            simplices_remaining, device=self.y.device
+        )  # (B,)
 
         xp_remaining = xp[~exact_match_mask]
 

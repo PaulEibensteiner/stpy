@@ -62,6 +62,8 @@ class PoissonRateEstimator(RateEstimator):
         roi: torch.Tensor | BorelSet | None = None,
         roi_discretization: int = 30,
         memory_limit=None,
+        device=torch.get_default_device(),
+        dtype=torch.get_default_dtype(),
     ):
         self.d = d
         """ Dimension of the data """
@@ -91,6 +93,8 @@ class PoissonRateEstimator(RateEstimator):
         else:
             self.beta = lambda t: beta
         self.var_cor_on = var_cor_on
+        self.device = device
+        self.dtype = dtype
 
         if basis == "triangle":
             self.packing = TriangleEmbedding(
@@ -314,7 +318,6 @@ class PoissonRateEstimator(RateEstimator):
         self,
         threads=4,
         optimization_library=None,
-        device: torch.device = torch.get_default_device(),
     ):
         optimization_library = (
             optimization_library
@@ -329,7 +332,7 @@ class PoissonRateEstimator(RateEstimator):
                     if optimization_library == "cvxpy":
                         self.penalized_likelihood(threads=threads)
                     elif optimization_library == "torch":
-                        self.penalized_likelihood_fast(device=device)
+                        self.penalized_likelihood_fast()
                     else:
                         raise NotImplementedError(
                             "The optimization method does not exist"
@@ -436,7 +439,7 @@ class PoissonRateEstimator(RateEstimator):
                 @ (S @ torch.tanh(y) + v)
             )
 
-        y = torch.rand(size=(self.get_m(), 1), dtype=torch.float64, requires_grad=True)
+        y = torch.rand(size=(self.get_m(), 1), dtype=self.dtype, requires_grad=True)
 
         # initiallize with map sqeezed more
         y.data = Gamma_half @ self.rate.view(-1, 1)  # u < theta < l
@@ -675,7 +678,7 @@ class PoissonRateEstimator(RateEstimator):
                 self.b
                 + 0.05
                 * torch.rand(
-                    size=(self.get_m(), 1), dtype=torch.float64, requires_grad=False
+                    size=(self.get_m(), 1), dtype=self.dtype, requires_grad=False
                 ).view(-1, 1)
                 ** 2
             )
@@ -814,7 +817,7 @@ class PoissonRateEstimator(RateEstimator):
         # hessian = lambda y: self.construct_covariance_matrix_laplace()
 
         y = prox(
-            torch.randn(size=(self.get_m(), 1), dtype=torch.float64, requires_grad=True)
+            torch.randn(size=(self.get_m(), 1), dtype=self.dtype, requires_grad=True)
         )
         y.data = self.rate.view(-1, 1)
 
@@ -906,7 +909,7 @@ class PoissonRateEstimator(RateEstimator):
             self.b
             + 0.05
             * torch.rand(
-                size=(self.get_m(), 1), dtype=torch.float64, requires_grad=True
+                size=(self.get_m(), 1), dtype=self.dtype, requires_grad=True
             ).view(-1)
             ** 2
         )
@@ -1006,7 +1009,7 @@ class PoissonRateEstimator(RateEstimator):
             self.b
             + 0.05
             * torch.rand(
-                size=(self.get_m(), 1), dtype=torch.float64, requires_grad=True
+                size=(self.get_m(), 1), dtype=self.dtype, requires_grad=True
             ).reshape(-1, 1)
             ** 2
         )
@@ -1093,7 +1096,7 @@ class PoissonRateEstimator(RateEstimator):
 
         y = (
             torch.rand(
-                size=(self.get_m(), 1), dtype=torch.float64, requires_grad=True
+                size=(self.get_m(), 1), dtype=self.dtype, requires_grad=True
             ).view(-1)
             ** 2
         )
@@ -1170,7 +1173,7 @@ class PoissonRateEstimator(RateEstimator):
         y = (
             0.05
             * torch.rand(
-                size=(self.get_m(), 1), dtype=torch.float64, requires_grad=True
+                size=(self.get_m(), 1), dtype=self.dtype, requires_grad=True
             ).view(-1, 1)
             ** 2
         )
@@ -1313,22 +1316,20 @@ class PoissonRateEstimator(RateEstimator):
         ucb = torch.quantile(paths, 1 - delta, dim=0)
         return lcb, ucb
 
-    def penalized_likelihood_fast(
-        self, device: torch.device = torch.get_default_device()
-    ):
+    def penalized_likelihood_fast(self):
         l, Lambda, u = self.get_constraints()
         # assert torch.allclose(Lambda, torch.eye(self.m**self.d))
 
         Gamma_half, invGamma_half = self.cov(inverse=True)
-        invGamma_half = invGamma_half.to(device)
+        invGamma_half = invGamma_half.to(self.device)
 
         s = self.s * 0.5
 
         if self.dual == False:
-            p = self.phis.to(device) @ invGamma_half
+            p = self.phis.to(self.device) @ invGamma_half
             # using all points without anchor points
             if self.observations is not None:
-                o = self.observations.to(device) @ invGamma_half
+                o = self.observations.to(self.device) @ invGamma_half
 
                 def objective(theta):
                     return (
@@ -1348,12 +1349,12 @@ class PoissonRateEstimator(RateEstimator):
             # using anchor points
             mask = self.bucketized_counts > 0
             phis = self.varphis[mask, :]
-            tau = self.total_bucketized_time[mask].to(device)
+            tau = self.total_bucketized_time[mask].to(self.device)
             p = phis @ invGamma_half
 
             if self.observations is not None:
-                observations = self.anchor_points_emb.to(device)
-                weights = self.anchor_weights.to(device)
+                observations = self.anchor_points_emb.to(self.device)
+                weights = self.anchor_weights.to(self.device)
                 mask = weights > 0.0
 
                 o = observations[mask, :] @ invGamma_half
@@ -1377,8 +1378,12 @@ class PoissonRateEstimator(RateEstimator):
                     )
 
         if isinstance(self.rate, torch.Tensor):
-            theta0 = torch.zeros(size=(self.get_m(), 1)).view(-1).double()
-            theta0.data = self.rate.data
+            theta0 = torch.cat(
+                [
+                    self.rate.to(self.device),
+                    torch.zeros([self.get_m() - len(self.rate)], device=self.device),
+                ]
+            )
         else:
             theta0 = torch.zeros(size=(self.get_m(), 1)).view(-1).double()
 
@@ -1391,7 +1396,7 @@ class PoissonRateEstimator(RateEstimator):
             bounds=(l[0] + eps, u[0]),
             precision="float64",
             tol=1e-8,
-            torch_device=str(device),
+            torch_device=str(self.device),
             options={
                 "ftol": 1e-08,
                 "gtol": 1e-08,
@@ -1402,7 +1407,7 @@ class PoissonRateEstimator(RateEstimator):
             },
         )
 
-        self.rate = invGamma_half @ torch.tensor(res.x)
+        self.rate = invGamma_half @ torch.tensor(res.x, device=self.device)
         print(res.message)
         return self.rate
 

@@ -291,7 +291,7 @@ class OptimalPositiveBasis(PositiveEmbedding):
             self.F_data,
             n_components=self.m,
             tol=1e-12,
-            use_gpu=True,
+            use_gpu=self.F_data.is_cuda,
             batch_max_iter=2000,
             fp_precision=self.F_data.dtype,
         )
@@ -352,15 +352,15 @@ class OptimalPositiveBasis(PositiveEmbedding):
         Phi_new, Theta_new, err = run_nmf(
             objective,
             n_components=n,
-            tol=1e-8,
+            tol=1e-7,
             use_gpu=True,
-            batch_max_iter=600,
+            batch_max_iter=100,
             fp_precision=objective.dtype,
         )
         Phi_new = torch.tensor(Phi_new)
         self.Phi = Phi_new / torch.linalg.norm(Phi_new, dim=0)
         self.m = self.data_m + n
-        self.interpolators.add(x, self.Phi, n)
+        self.interpolators.set(1, x, self.Phi, n)
         self.precomp = False
         self.precomp_integral = {}
 

@@ -136,7 +136,7 @@ class PositiveEmbedding(Embedding):
             return self.Gamma_half
 
     def embed_internal(self, x):
-        """Returns a tensor $T$ where $T_{i,j} = \phi_j(x_i)$."""
+        r"""Returns a tensor $T$ where $T_{i,j} = \phi_j(x_i)$."""
         if self.d == 1:
             out = torch.zeros(size=(x.size()[0], self.m), dtype=torch.float64)
             for j in range(self.m):

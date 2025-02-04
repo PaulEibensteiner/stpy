@@ -15,23 +15,26 @@ def _initialize(tri: Delaunay, tree: cKDTree):
     xtree = tree
 
 
-def _find_exact_or_simplex_batch(batch: np.ndarray):
-    distances, idx = xtree.query(batch, k=1, distance_upper_bound=1e-7)
+def _find_exact_or_simplex_batch(batch: np.ndarray, tri_local=None, xtree_local=None):
+    if tri_local is None:
+        tri_local = shared_triangulation
+    if xtree_local is None:
+        xtree_local = xtree
+    distances, idx = xtree_local.query(batch, k=1, distance_upper_bound=1e-7)
     exact_match_mask = distances <= 1e-7
     batch_remaining = batch[~exact_match_mask]
 
-    simplices = shared_triangulation.find_simplex(batch_remaining)
+    simplices = tri_local.find_simplex(batch_remaining)
     outside_conv_hull_mask = simplices < 0
 
     simplices_remaining = simplices[~outside_conv_hull_mask]
     exact_match_mask[~exact_match_mask] = outside_conv_hull_mask
 
     idx = idx[exact_match_mask]
-    if len(simplices_remaining) > 0:
-        no_match_mask = idx == len(xtree.data)
-        if no_match_mask.any():
-            _, idx_no_match = xtree.query(batch[exact_match_mask][no_match_mask], k=1)
-            idx[no_match_mask] = idx_no_match
+    no_match_mask = idx == len(xtree_local.data)
+    if no_match_mask.any():
+        _, idx_no_match = xtree_local.query(batch[exact_match_mask][no_match_mask], k=1)
+        idx[no_match_mask] = idx_no_match
 
     return idx, simplices_remaining, exact_match_mask
 
@@ -48,33 +51,44 @@ class InterpolatorArray:
         if num_cpu_cores is None:
             num_cpu_cores = cpu_count()
         self.num_cpu_cores = num_cpu_cores
-        pool = Pool(num_cpu_cores, _initialize, [tri, xtree])
-        self.interpolators = [
-            InterpolatorND(x, phi[:, j], tri, xtree, pool, num_cpu_cores)
-            for j in range(m)
-        ]
-        self.pools = [pool]
+        if self.num_cpu_cores >= 1:
+            pool = Pool(self.num_cpu_cores, _initialize, [tri, xtree])
+        else:
+            pool = None
+        self.interpolators = {
+            0: [
+                InterpolatorND(x, phi[:, j], tri, xtree, pool, num_cpu_cores)
+                for j in range(m)
+            ]
+        }
+        self.pools = {0: pool}
 
     def __call__(self, j: int, q: torch.Tensor):
-        return self.interpolators[j](q).view(-1, 1)
+        all_interpolators = [ip for list in self.interpolators.values() for ip in list]
+        return all_interpolators[j](q).view(-1, 1)
 
-    def add(self, x: torch.Tensor, phi: torch.Tensor, m: int):
+    def set(self, i: int, x: torch.Tensor, phi: torch.Tensor, m: int):
         x_cpu = x.cpu().numpy()
         tri = Delaunay(x_cpu)
         xtree = cKDTree(x_cpu)
-        pool = Pool(self.num_cpu_cores, _initialize, [tri, xtree])
-        self.interpolators.extend(
-            [
-                InterpolatorND(x, phi[:, j], tri, xtree, pool, self.num_cpu_cores)
-                for j in range(m)
-            ]
-        )
-        self.pools.append(pool)
+        if self.num_cpu_cores >= 1:
+            pool = Pool(self.num_cpu_cores, _initialize, [tri, xtree])
+        else:
+            pool = None
+        self.interpolators[i] = [
+            InterpolatorND(x, phi[:, j], tri, xtree, pool, self.num_cpu_cores)
+            for j in range(m)
+        ]
+        if i in self.pools and self.pools[i] is not None:
+            self.pools[i].close()
+            self.pools[i].join()
+        self.pools[i] = pool
 
     def __del__(self):
-        for pool in self.pools:
-            pool.close()
-            pool.join()
+        for pool in self.pools.values():
+            if pool is not None:
+                pool.close()
+                pool.join()
 
 
 class InterpolatorND:
@@ -115,12 +129,17 @@ class InterpolatorND:
 
             # Build the Delaunay triangulation on CPU
             self.tri = Delaunay(x_cpu)
-            xtree = cKDTree(x_cpu)
+            self.xtree = cKDTree(x_cpu)
 
             if num_cpu_cores is None:
                 num_cpu_cores = cpu_count()
             self.num_cpu_cores = num_cpu_cores
-            self.pool = Pool(num_cpu_cores, _initialize, [self.tri, xtree])
+            if self.num_cpu_cores >= 1:
+                self.pool = Pool(num_cpu_cores, _initialize, [self.tri, self.xtree])
+                self.own_pool = True
+            else:
+                self.pool = None
+                self.own_pool = False
             self.own_pool = True
 
         self.x = x
@@ -142,7 +161,7 @@ class InterpolatorND:
         self.v0 = v0  # Store v0 for barycentric computation
 
     def __del__(self):
-        if self.own_pool:
+        if self.own_pool and self.pool is not None:
             self.pool.close()
             self.pool.join()
 
@@ -163,11 +182,16 @@ class InterpolatorND:
         # simplex_idx = self.tri.find_simplex(xp_cpu)  # (B,)
 
         # Split xp_cpu into batches for parallel processing
-        batches = np.array_split(xp_cpu, self.num_cpu_cores)
-        # Use multiprocessing to parallelize find_simplex
-        results = self.pool.map_async(
-            _find_exact_or_simplex_batch, [batch for batch in batches]
-        ).get(timeout=10)
+        if self.pool is not None:
+            batches = np.array_split(xp_cpu, self.num_cpu_cores)
+            # Use multiprocessing to parallelize find_simplex
+            results = self.pool.map_async(
+                _find_exact_or_simplex_batch, [batch for batch in batches]
+            ).get(timeout=10)
+        else:
+            # Run find_simplex sequentially
+            results = [_find_exact_or_simplex_batch(xp_cpu, self.tri, self.xtree)]
+
         # Concatenate the results back into a single array
         # results = [(out_exact_matches0, xp0, simplices0), (out_exact_matches1, xp1, simplices1), ...]
         exact_matches_idx_list = []
@@ -244,7 +268,7 @@ def plot_simple_function():
     y_train = torch.tensor(z_flat, dtype=torch.float64, device="cuda")
 
     # Create the interpolator
-    interpolator = InterpolatorND(x_train, y_train, num_cpu_cores=1)
+    interpolator = InterpolatorND(x_train, y_train, num_cpu_cores=0)
 
     # Generate slightly offset query points
     n_query = 21
@@ -343,4 +367,4 @@ if __name__ == "__main__":
     import numpy as np
     import matplotlib.pyplot as plt
 
-    interploate_between()
+    plot_simple_function()

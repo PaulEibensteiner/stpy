@@ -79,8 +79,8 @@ class TriangleEmbedding(PositiveEmbedding):
         :param S: borel set
         :return: $\int_S \Phi(x) dx$
         """
-        if S in self.procomp_integrals.keys():
-            return self.procomp_integrals[S]
+        if S in self.precomp_integral.keys():
+            return self.precomp_integral[S]
 
         else:
             assert S.d == self.d
@@ -121,7 +121,7 @@ class TriangleEmbedding(PositiveEmbedding):
 
             Gamma_half = self.cov()
             emb = psi @ Gamma_half
-            self.procomp_integrals[S] = emb
+            self.precomp_integral[S] = emb
             return emb
 
 

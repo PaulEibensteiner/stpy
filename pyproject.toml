@@ -1,0 +1,63 @@
+[project]
+name = "stpy"
+version = "0.0.2"
+authors = [{ name = "Mojmir Mutny", email = "mojmir.mutny@inf.ethz.ch" }]
+license = { text = "custom" }
+description = "Stochastic Process Library for Python"
+dependencies = [
+    "numpy",
+    "scipy",
+    "matplotlib",
+    "scikit-learn",
+    "tensorflow",
+    "cvxpy",
+    "pymanopt",
+    "pandas",
+    "mosek",
+    "quadprog",
+    "cvxpylayers",
+    "autograd_minimize",
+    "tqdm",
+]
+
+[project.optional-dependencies]
+cpu = ["torch==2.11.0", "torch-cluster", "nmf-torch", "fast-pytorch-kmeans"]
+torch-2-11-cu128 = ["torch==2.11.0", "torch-cluster", "nmf-torch", "fast-pytorch-kmeans"]
+
+[tool.uv]
+conflicts = [[{ extra = "cpu" }, { extra = "torch-2-11-cu128" }]]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[[tool.uv.index]]
+name = "pyg-cpu"
+url = "https://data.pyg.org/whl/torch-2.14.0+cpu.html"
+format = "flat"
+explicit = true
+
+[[tool.uv.index]]
+name = "pyg-cu128"
+url = "https://data.pyg.org/whl/torch-2.11.0%2Bcu128.html"
+format = "flat"
+explicit = true
+
+[tool.uv.sources]
+torch = [
+  { index = "pytorch-cpu", extra = "cpu" },
+  { index = "pytorch-cu128", extra = "torch-2-11-cu128" },
+]
+torch-cluster = [
+  { index = "pyg-cpu", extra = "cpu" },
+  { index = "pyg-cu128", extra = "torch-2-11-cu128" },
+]
+
+[tool.setuptools.packages.find]
+include = ["stpy*"]

@@ -318,7 +318,12 @@ class PoissonRateEstimator(RateEstimator):
         self,
         threads=4,
         optimization_library=None,
+        callback=None,
     ):
+        """
+        :param callback: only used by the torch likelihood path; called before every
+            objective evaluation, may raise to abort the fit
+        """
         optimization_library = (
             optimization_library
             if optimization_library is not None
@@ -332,7 +337,7 @@ class PoissonRateEstimator(RateEstimator):
                     if optimization_library == "cvxpy":
                         self.penalized_likelihood(threads=threads)
                     elif optimization_library == "torch":
-                        self.penalized_likelihood_fast()
+                        self.penalized_likelihood_fast(callback=callback)
                     else:
                         raise NotImplementedError(
                             "The optimization method does not exist"
@@ -1316,7 +1321,7 @@ class PoissonRateEstimator(RateEstimator):
         ucb = torch.quantile(paths, 1 - delta, dim=0)
         return lcb, ucb
 
-    def penalized_likelihood_fast(self):
+    def penalized_likelihood_fast(self, callback=None):
         l, Lambda, u = self.get_constraints()
         # assert torch.allclose(Lambda, torch.eye(self.m**self.d))
 
@@ -1376,6 +1381,13 @@ class PoissonRateEstimator(RateEstimator):
                     return torch.einsum("i,i", tau, p @ theta) + s * torch.sum(
                         (invGamma_half @ theta) ** 2
                     )
+
+        if callback is not None:
+            _objective = objective
+
+            def objective(theta):
+                callback()
+                return _objective(theta)
 
         if isinstance(self.rate, torch.Tensor):
             theta0 = torch.cat(

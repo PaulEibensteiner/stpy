@@ -39,6 +39,7 @@ class OptimalPositiveBasis(PositiveEmbedding):
         self.fast = fast_sampling
         self.memory_limit = memory_limit if memory_limit is not None else 40
         self.interpolators = None
+        self.roi = None  # extra points the basis is currently defined on, set by fit / add_new_functions
 
         if data is None:
             B = BorelSet(
@@ -120,6 +121,8 @@ class OptimalPositiveBasis(PositiveEmbedding):
         if self.precomp == False:
 
             x = self.discretized_domain
+            if self.roi is not None:
+                x = torch.cat((x, self.roi), dim=0)
             vals = self.embed_internal(x)
             indices = torch.argmax(
                 vals, dim=0
@@ -153,6 +156,10 @@ class OptimalPositiveBasis(PositiveEmbedding):
             return self.Gamma_half
 
     def _sample_gaussian_prior(self, x: torch.Tensor):
+        """
+        :return: (y, L, g) with y the positive samples, L the cholesky factor of the
+            covariance and g the latent gaussian samples y is derived from
+        """
         n = self.num_samples
         dim = len(x)
         Cov = self.kernel_object.kernel(x, x) + 10e-7 * torch.eye(
@@ -163,7 +170,8 @@ class OptimalPositiveBasis(PositiveEmbedding):
             random_vector = torch.normal(
                 mean=torch.zeros(dim, n, dtype=torch.float64), std=1.0
             )
-            y = torch.mm(L, random_vector) ** 2
+            g = torch.mm(L, random_vector)
+            y = g**2
         else:
             y = torch.tensor(
                 tmg(
@@ -177,18 +185,25 @@ class OptimalPositiveBasis(PositiveEmbedding):
                 ),
                 dtype=torch.float64,
             )
-        return y, L
+            g = y
+        return y, L, g
 
-    def _sample_gaussian_conditional(self, x_old, L_old, y_old, x):
+    def _sample_gaussian_conditional(self, x_old, L_old, g_old, x):
+        """
+        Samples at x conditioned on the latent gaussian samples g_old at x_old
+        (not on the positive samples derived from them).
+
+        :return: (y, g) as in _sample_gaussian_prior
+        """
         dim = len(x)  # dimensionality of input
-        n = y_old.size(1)  # number of samples
+        n = g_old.size(1)  # number of samples
 
         K_new_new = self.kernel_object.kernel(x, x) + 1e-7 * torch.eye(
             dim, dtype=torch.float64
         )
         K_new_old = self.kernel_object.kernel(x_old, x)
 
-        alpha = torch.linalg.solve_triangular(L_old, y_old, upper=False)
+        alpha = torch.linalg.solve_triangular(L_old, g_old, upper=False)
         alpha = torch.linalg.solve_triangular(L_old.T, alpha, upper=True)
 
         mu_star = K_new_old @ alpha  # shape (dim, n)
@@ -207,7 +222,8 @@ class OptimalPositiveBasis(PositiveEmbedding):
             random_vector_new = torch.normal(
                 mean=torch.zeros(dim, n, dtype=torch.float64), std=1.0
             )
-            y_new = (mu_star + L_star @ random_vector_new) ** 2
+            g_new = mu_star + L_star @ random_vector_new
+            y_new = g_new**2
         else:
             y_new = torch.tensor(
                 tmg(
@@ -221,8 +237,9 @@ class OptimalPositiveBasis(PositiveEmbedding):
                 ),
                 dtype=torch.float64,
             )
+            g_new = y_new
 
-        return y_new
+        return y_new, g_new
 
     def _subsample_if_necessary(self, x: torch.Tensor):
         # Calculate number of clusters
@@ -285,9 +302,8 @@ class OptimalPositiveBasis(PositiveEmbedding):
     def _fit_data(self, data):
         self.data_m = self.m
         data = self._subsample_if_necessary(data)
-        self.F_data, self.L_data = self._sample_gaussian_prior(data)
-        self.F_data = self.F_data**2
-        self.W_data, self.H_data, err = run_nmf(
+        self.F_data, self.L_data, self.G_data = self._sample_gaussian_prior(data)
+        W, H, err = run_nmf(
             self.F_data,
             n_components=self.m,
             tol=1e-12,
@@ -295,9 +311,12 @@ class OptimalPositiveBasis(PositiveEmbedding):
             batch_max_iter=2000,
             fp_precision=self.F_data.dtype,
         )
-        self.W_data = torch.tensor(self.W_data)
-        self.H_data = torch.tensor(self.H_data)
-        self.W_data = self.W_data / torch.linalg.norm(self.W_data, dim=0)
+        W = torch.tensor(W)
+        H = torch.tensor(H)
+        norms = torch.linalg.norm(W, dim=0)
+        self.W_data = W / norms
+        # rescale H so that W_data @ H_data is still the NMF reconstruction of F_data
+        self.H_data = H * norms[:, None]
         self.data = data
         W_norm = self.W_data
         self._set_interpolators(data, W_norm)
@@ -317,8 +336,10 @@ class OptimalPositiveBasis(PositiveEmbedding):
         print("Refitting optimal basis")
         self.precomp = False
         x = torch.cat((self.data, roi), dim=0)
-        F, _ = self._sample_gaussian_prior(x)
-        F = F**2
+        F_roi, _ = self._sample_gaussian_conditional(
+            self.data, self.L_data, self.G_data, roi
+        )
+        F = torch.cat((self.F_data, F_roi), dim=0)
         # Note: using cpu based NMF here since run_nmf has no way to pass initialization
         model = NMF(n_components=self.data_m, max_iter=200, tol=1e-8, init="custom")
         phi_roi_init = torch.zeros([len(roi), self.data_m], dtype=torch.float64)
@@ -332,14 +353,15 @@ class OptimalPositiveBasis(PositiveEmbedding):
         )
         self.Phi = W / torch.linalg.norm(W, dim=0)
         self.m = self.data_m
+        self.roi = roi
         self._set_interpolators(x, self.Phi)
         self.precomp = False
         self.precomp_integral = {}
 
     def add_new_functions(self, roi: torch.Tensor, n: int):
         x = torch.cat((self.data, roi), dim=0)
-        F_new = self._sample_gaussian_conditional(
-            self.data, self.L_data, self.F_data, roi
+        F_new, _ = self._sample_gaussian_conditional(
+            self.data, self.L_data, self.G_data, roi
         )
         F = torch.cat([self.F_data, F_new])
         Phi_old = (
@@ -360,6 +382,7 @@ class OptimalPositiveBasis(PositiveEmbedding):
         Phi_new = torch.tensor(Phi_new)
         self.Phi = Phi_new / torch.linalg.norm(Phi_new, dim=0)
         self.m = self.data_m + n
+        self.roi = roi
         self.interpolators.set(1, x, self.Phi, n)
         self.precomp = False
         self.precomp_integral = {}
